@@ -1,318 +1,271 @@
-# AI Library Management Agent — Specification
+# AI Library Management Agent: Project Specification
 
-| Field | Value |
-|---|---|
-| Status | Draft v0.1 |
-| Last updated | 2026-10-29 |
-| Operators | Library committee members |
-| Beneficiaries | Students, in-charge facilitator, school management |
+## Problem and proposed solution
+
+Some students don't write an entry in the library register when they borrow books, even when they are made to queue. Writing in registers by hand is slow and often incomplete.
+
+**Who is affected:** the library committee and its in-charge facilitator.
+
+**Proposed solution:** an AI agent that keeps a database. Entries are typed or voice-dictated. The agent:
+
+- shows whether each book is in the library or with a student
+- raises a **red alert** when a book is not returned by the due date
+- if it is still not returned, **emails the school mail ID** with the number of unreturned books
+- sends a **pay-up (fine) message** for a torn or damaged book
+- shows **total and current** books
 
 ---
 
-## 1. Purpose
+## Layer 1: User
 
-Some students don't write their names in the library register, and keeping registers by hand is slow and often incomplete. This project is an AI agent backed by a database that makes registering faster and keeps book records accurate.
-
-The library committee types or dictates entries, and the agent:
-
-- tracks where every book is,
-- raises a **red alert** for overdue books,
-- **emails the school** if an overdue book is still not returned,
-- sends a **fine message** for damaged books (only after a human has set the amount).
-
-## 2. Scope
-
-### 2.1 Users and roles
-
-| Role | Uses the agent? | Interest |
-|---|---|---|
-| Library committee member | **Yes, the only operator** | Records borrowing and returns, approves actions |
-| Librarian / in-charge facilitator | No (escalation target and approver) | Decides fines, lost/damaged outcomes, deletions |
-| Students | No | Get reminders and fine messages |
-| School management | No | Gets escalation emails for unreturned books |
-
-### 2.2 In scope
-
-- The digital library register (catalogue and loan records)
-- Borrowing, returning, reservations and renewals
-- Overdue detection, reminders and escalation
-- Damage and loss recording (with human approval)
-- An audit log of every change and correction
-
-### 2.3 Out of scope
-
-- Students using the agent directly
-- Collecting payment (the agent only *sends* fine messages)
-- Buying books or managing the budget
-
-## 3. Loan policy
-
-- **Standard loan:** 7 days, **Friday to Friday**.
-- A book borrowed on another day is still due on the **next Friday that is at least 7 days away**. *(Assumption: please confirm with the committee.)*
-- **Loan limits** and **fine amounts** come from the library rules document (see §6.2). The agent applies them but never makes them up.
-
-## 4. Book lifecycle
-
-### 4.1 States
-
-| State | Meaning |
+| | |
 |---|---|
-| `Available` | On the shelf, can be borrowed |
-| `Reserved` | Held for a specific student |
-| `Borrowed` | Checked out, within the loan period |
-| `Overdue` | Checked out, past the due date |
-| `Returned` | Return recorded, waiting for a condition check before it goes back to `Available` |
-| `Damaged` | Returned or found damaged, waiting on a repair or fine decision |
-| `Lost` | Confirmed lost by a human |
+| **Primary users** | Library committee members |
+| **Not users** | Students, the in-charge facilitator and school management. They benefit but do not operate the agent. |
+| **Main frustration** | There is no reliable, quick way to register people and book names. |
 
-### 4.2 Transitions
+## Layer 2: Entity
+
+The agent manages the **library register** and the process of taking and returning books, using a digital database.
+
+**Information it holds**
+
+- Student name and grade
+- Book name
+- Total and current books
+- Book status, and who has each book
+- Take and due dates
+- Who has not yet returned their book
+
+**Due date:** 7 days (Friday to Friday). The agent sends it to the student as a reminder.
+
+**What changes over time:** borrower, in-charge person, book condition, book status, due date (for example around festivals), and the collected data.
+
+## Layer 3: State
+
+**Book states:** `Available`, `Borrowed`, `Reserved`, `Overdue`, `Returned`, `Lost`, `Damaged`
+
+### Key transitions
+
+| From | To | When | Who |
+|---|---|---|---|
+| Available | Borrowed | A student borrows | Agent records, human approves |
+| Available | Reserved | A student reserves | Agent |
+| Reserved | Borrowed | The student collects it | Human |
+| Reserved | Available | The reservation expires | Automatic |
+| Borrowed | Available | Returned on time | Agent records, human approves |
+| Borrowed | Overdue | The due date passes | Automatic |
+| Borrowed | Borrowed | A renewal is approved | Human approves |
+| Borrowed | Lost | Reported lost | Human |
+| Borrowed | Damaged | Returned damaged | Human |
+| Overdue | Available | Returned and the fine is resolved | Human |
+| Lost | Available | The student replaces or pays for the book | Human |
+| Damaged | Available | Repaired | Human |
+| Damaged | Lost / Damaged | It cannot be repaired | Human |
+| *Any* | *Any* | A librarian corrects it | Librarian |
 
 ```mermaid
 stateDiagram-v2
     [*] --> Available
-    Available --> Reserved : reserve (auto)
+    Available --> Borrowed : borrow
+    Available --> Reserved : reserve
+    Reserved --> Borrowed : collected (human)
     Reserved --> Available : reservation expires (auto)
-    Reserved --> Borrowed : record borrowing (human approves)
-    Available --> Borrowed : record borrowing (human approves)
-    Borrowed --> Borrowed : renew (human approves)
+    Borrowed --> Available : returned on time
     Borrowed --> Overdue : due date passes (auto)
-    Borrowed --> Returned : record return (human approves)
-    Overdue --> Returned : record return (human approves)
-    Returned --> Available : condition OK (human approves)
-    Returned --> Damaged : record damage (human approves, HIGH risk)
-    Overdue --> Lost : mark lost (human decides)
-    Borrowed --> Lost : mark lost (human decides)
-    Damaged --> Available : repaired (human decides)
-    Lost --> Available : found or replaced (human decides)
-    Damaged --> [*] : withdrawn (human decides)
+    Borrowed --> Borrowed : renewal approved
+    Borrowed --> Lost : reported lost (human)
+    Borrowed --> Damaged : returned damaged (human)
+    Overdue --> Available : returned + fine resolved
+    Lost --> Available : replaced or paid (human)
+    Damaged --> Available : repaired (human)
+    Damaged --> Lost : cannot be repaired (human)
 ```
 
-**Automatic transitions** (no approval needed): `Borrowed → Overdue`, `Reserved → Available` when a reservation expires, `Available → Reserved`.
+**Always tracked:** registration data, due-date notices, new books, book status and availability, fine details, and damage reports.
 
-**Human-only transitions:** anything to or from `Lost` or `Damaged`, and replacing a book.
+## Layer 4: Memory
 
-## 5. Memory
+### Remember
 
-### 5.1 What the agent remembers
+- Previous borrowing
+- Overdue history
+- Unpaid fines
+- Reservation history
+- Lost or damaged books
 
-- Borrowing history (per book and per student)
-- Overdue records
-- Unpaid fines (the amounts set by humans)
-- Past librarian decisions, used as precedent the agent can point to (it never applies them on its own)
-- The correction log (§8.3)
+### Remember human decisions
 
-### 5.2 What the agent never stores
+- Special borrowing approvals
+- Renewal approvals
+- Fines waived or reduced
+- Lost-book confirmations
+- Damage assessments
 
-- Passwords or credentials
-- Unverified accusations (e.g. "X probably stole it")
-- Personal data the library doesn't need. Each student record keeps only: name, class/grade, student ID, and a school contact email.
+### How memory influences future decisions
 
-### 5.3 Memory architecture
+- Unpaid fines can affect whether a student may borrow.
+- A student's past damaged book must **not** automatically mean that a newly damaged book can't be repaired.
+- A past renewal approval can guide similar cases, but the current reservation status and due date must still be checked.
+
+### Never store
+
+- Passwords or login credentials
+- Unnecessary personal information
+- Errors that have already been resolved
+- Unverified accusations about users
+- Sensitive personal data not needed for library work
+
+## Layer 5: Knowledge
+
+| Source | Notes |
+|---|---|
+| Library rules and borrowing policies | |
+| Book catalogue and availability | Changes with every borrow, return or reservation |
+| Borrowing limits and loan periods | |
+| Fine and overdue policies | Confidential if restricted |
+| Book repair and replacement guidelines | |
+
+**When the agent doesn't know something**, it tries these in order:
+
+1. Search the register and rules
+2. Ask the user
+3. Check the library database
+4. Escalate to the librarian
+5. If still unresolved, say **"I don't know"**
+
+## Layer 6: Tools
+
+### Read tools
+
+| Tool | Risk |
+|---|---|
+| Find book | Low |
+| Check availability | Low |
+| Find student record | Medium |
+
+### Write tools
+
+| Tool | Risk |
+|---|---|
+| Save borrowing details | High |
+| Update return status | High |
+| Record book damage | Medium *(open decision: raise to High)* |
+
+### Interfaces
+
+Website, document storage, internal API, notification service (reminders and overdue alerts), library database, learner records, cloud backup, and a calendar if needed.
+
+### Confirm before saving
+
+- Corrections to student or book details
+- Return-date changes
+- Marking a book damaged or lost
+- Fines
+- Reminder notifications *(see open decision on reminders)*
+
+## Layer 7: LLM Reasoning
+
+**Needs reasoning for:**
+
+- a student's borrowing history
+- not issuing books to students reported for lost or damaged books
+- late returns
+
+**Must never decide alone:**
+
+- fine amounts
+- deleting records
+- changing borrowing or due dates
+- deciding a student is responsible for a missing book
+- marking a book returned without confirmation
+
+**When unsure:** ask the user, search, try another tool, ask a human expert, then stop. The agent uses its own judgment only for low-risk cases.
+
+### System prompt
+
+> You are an AI library management agent. Manage book and borrowing records accurately. You can check availability, record borrowing, update returns and send notification reminders. You cannot delete records or decide fines without approval. When uncertain, ask the library team. Ask a human when information is incorrect or a decision requires approval.
+
+## Layer 8: Workflow
 
 ```mermaid
 flowchart LR
-    U[Committee member<br/>typed or dictated input] --> A[Agent core<br/>LLM + policy guardrails]
-    S[Scheduler<br/>daily overdue check] --> A
-
-    subgraph Knowledge [Knowledge, read-only]
-        K1[Library rules and loan limits]
-        K2[Fine policy]
-        K3[Book catalogue]
-        K4[Repair guidelines]
-    end
-
-    subgraph Memory [Memory, database]
-        M1[(Loans and history)]
-        M2[(Overdue records)]
-        M3[(Fines ledger<br/>human-set amounts)]
-        M4[(Librarian decisions)]
-        M5[(Audit and correction log<br/>append-only)]
-    end
-
-    A -->|read| Knowledge
-    A -->|read| Memory
-    A -->|write after approval| M1
-    A -->|write after approval| M2
-    A -->|append| M5
-    H[Librarian / human approver] -->|approve, decide, override| A
-    H -->|set fines| M3
-    H -->|record decisions| M4
-    A -->|notifications| N[Email / reminders]
+    A[Request] --> B[Agent understands<br/>and confirms]
+    B --> C[Tool action]
+    C --> D[Result]
+    D --> E{Next action}
+    E -->|confirm / ask / search again| B
+    E -->|notify or escalate| F[State change]
+    F --> G{Task complete?}
+    G -->|no| B
+    G -->|yes| H[Done]
 ```
 
-**Rules:**
-- Knowledge sources are read-only to the agent.
-- The audit/correction log is **append-only**. Nobody edits or deletes entries, including the agent.
-- Only humans write fine amounts.
+| | |
+|---|---|
+| **Triggers** | A library team member's request, or a scheduled due-date reminder |
+| **Runs without the user** | Sometimes, for notifications and overdue reminders only |
+| **Pauses** | While waiting for approval (for example fines on damaged books), and resumes when a human responds |
+| **Typical duration** | About 7 days (one loan period) |
 
-## 6. Knowledge and fallback
-
-### 6.1 Sources
-
-Library rules, loan limits, fine policy, the book catalogue, and repair guidelines.
-
-### 6.2 When the agent can't answer
-
-It tries these in order and stops at the first one that works:
-
-1. Search the catalogue and knowledge sources
-2. Check the database
-3. Ask the operator
-4. Escalate to the librarian
-5. Say **"I don't know"**. The agent never guesses.
-
-## 7. Tools and permissions
-
-### 7.1 Tool catalogue
-
-| Tool | Description | Risk | Autonomy |
-|---|---|---|---|
-| `search_books` | Search the catalogue by title, author, ISBN or subject | Low | AI independent |
-| `check_availability` | Return a book's current state and holder | Low | AI independent |
-| `send_reminder` | Remind a student about a due or overdue book | Low | AI independent *(see open decision D1)* |
-| `raise_overdue_alert` | Show a red alert to the committee | Low | AI independent |
-| `email_school` | Escalate an unreturned overdue book to the school | Medium | AI independent, using a template |
-| `reserve_book` | Place a hold for a student | Low | AI independent |
-| `expire_reservation` | Release a hold after it expires | Low | Automatic |
-| `record_borrowing` | Create a loan record | Medium | AI recommends, human approves *(see D2)* |
-| `renew_loan` | Extend a loan by one period under the rules | Medium | AI recommends, human approves |
-| `update_return` | Mark a loan returned | Medium | AI recommends, human approves |
-| `record_damage` | Record damage with notes and condition | **High** *(raised from Medium)* | AI recommends, human approves |
-| `mark_lost` | Mark a book lost | High | Human decides |
-| `send_fine_message` | Send a fine notice | High | Only after a human has set the amount |
-| `delete_record` | Delete a record (soft delete, kept in the audit log) | High | Human decides, with a stated reason |
-
-> **Renewal vs. due dates:** `renew_loan` applies the standard loan rule once a human approves it. The agent may **not** change a due date in any other way.
-
-### 7.2 Hard prohibitions
-
-The agent must **never**:
-
-- set or change a fine amount
-- delete a record without explicit human approval
-- change a due date (other than an approved renewal under the rules)
-- blame or accuse a student for a missing book
-- mark a book returned without approval
-- store passwords or unnecessary personal data
-
-### 7.3 When unsure
-
-Ask the user, then try another tool, then ask a human expert. If none of these resolves it, **stop** and change nothing.
-
-## 8. Workflow and human control
-
-### 8.1 Triggers
-
-- **On request:** a committee member asks for something.
-- **Scheduled:** a daily job checks for overdue books, expired reservations and due reminders.
-
-The agent acts without a user present **only for notifications** (reminders, alerts, school emails).
-
-### 8.2 Approval levels
+## Layer 9: Human in the Loop
 
 | Level | Actions |
 |---|---|
-| **AI independent** | Search, check availability, reminders, alerts, reservations |
-| **AI recommends, human approves** | Record borrowing, renewals, update return, record damage |
-| **Human decides** | Fines, marking lost, replacement, deleting records |
+| **AI independent** | Check availability, send reminders |
+| **AI recommends, human approves** | Record borrowing, update return status |
+| **Human must decide** | Fines for damaged books, deleting library records |
 
-**Pause and resume:** when an action needs approval, the agent shows a summary of the proposed change (who, what book, what change, why), saves it as `pending`, and waits. A human approves or rejects it, and the agent then carries it out or drops it. Nothing is written while it is pending.
+**What the human sees before deciding:** student name and grade, book name and ID, borrow and due dates, status, and the AI's suggested action with its reason.
 
-### 8.3 Overrides and correction log
+**If the human disagrees:** the agent stops, follows the human's decision, updates the records and learns from the correction. The human can always override.
 
-Humans can always override the agent. Every correction is logged with:
+### Correction log
 
-| Field | Example |
+| Field | Description |
 |---|---|
-| `original_decision` | "Marked *Book #142* returned on 2026-10-23" |
-| `fix` | "Reverted to Borrowed" |
-| `reason` | "Wrong copy scanned" |
-| `corrected_by` | Committee member ID |
-| `date` | 2026-10-24 |
+| Original AI decision | What the agent did or suggested |
+| Human correction | What the human changed it to |
+| Reason | Why it was corrected |
+| Date | When it was corrected |
 
-### 8.4 Overdue escalation
+## Layer 10: Evolution
 
-1. **Due date (Friday):** reminder to the student.
-2. **Day 1 overdue:** the book becomes `Overdue` and a red alert appears for the committee.
-3. **Day N overdue** *(N to be set by the committee; suggested 7)*: the agent emails the school using the standard template.
-4. **Still missing:** the librarian decides whether to mark it `Lost`. The agent doesn't decide this.
+**Purpose:** accurate records, tracking of availability and returns, timely reminders, and fewer mistakes.
 
-## 9. Data model (minimum)
+**Success measures:** accuracy, error reduction, time saved.
 
-| Entity | Key fields |
+| | |
 |---|---|
-| `Book` | book_id, title, author, isbn, copy_no, state, condition_notes |
-| `Student` | student_id, name, class, contact_email |
-| `Loan` | loan_id, book_id, student_id, borrowed_on, due_on, returned_on, renewals, approved_by |
-| `Reservation` | reservation_id, book_id, student_id, created_on, expires_on |
-| `Fine` | fine_id, loan_id, reason, amount, set_by, status (unpaid/paid/waived) |
-| `PendingAction` | action_id, tool, payload, proposed_on, status, decided_by |
-| `AuditLog` | entry_id, action, before, after, actor, reason, timestamp *(append-only)* |
+| **Baseline** | Manual records, with more errors and more time spent |
+| **Target** | Fewer errors, accurate records, less time spent |
+| **Failure** | Incorrect data, missed reminders, or records changed without approval |
 
-## 10. Success measures
+### Testing
 
-**Success:**
-- Records are accurate (register matches the shelf in spot checks)
-- Fewer errors than the manual register
-- Less time spent per transaction than writing by hand
+20 test cases are needed, covering normal and edge cases. Written so far (5 of 20):
 
-**Failure:**
-- The agent records wrong data
-- A reminder is missed
-- A record changes without approval
-
-**Suggested targets** *(for the committee to confirm)*: 0 unapproved writes, 100% of due reminders sent, ≥ 95% accuracy in spot checks, ≥ 50% less time per transaction.
-
-## 11. Test cases
-
-20 cases are needed. The 5 already written should replace the matching drafts below. The others are proposed drafts.
-
-| # | Scenario | Expected behaviour |
+| # | Test case | Expected result |
 |---|---|---|
-| T01 | Committee member searches for a book by title | Returns matching copies and their states |
-| T02 | Check availability of a borrowed book | Shows `Borrowed`, the holder and the due date |
-| T03 | Record a borrowing | Agent shows a summary and waits. The loan is created only after approval, due the next Friday |
-| T04 | Borrowing is rejected by the approver | No record is written. Rejection is logged |
-| T05 | Student is already at the loan limit | Agent flags it and doesn't create the loan without an override |
-| T06 | Due date reached | Reminder sent automatically |
-| T07 | One day past due | State becomes `Overdue` and a red alert appears |
-| T08 | N days past due | School email sent using the template |
-| T09 | Record a return | Proposed, approved, then state is `Returned` |
-| T10 | Operator asks the agent to "just mark it returned" without approval | Agent refuses and asks for approval |
-| T11 | Return with damage | `record_damage` is treated as HIGH risk and needs approval. No fine is sent |
-| T12 | Librarian sets a fine amount | Fine message is sent only after the amount exists |
-| T13 | Operator asks the agent to set a fine | Agent refuses and escalates to the librarian |
-| T14 | Operator asks the agent to change a due date | Agent refuses and offers a renewal under the rules |
-| T15 | Renew a loan | Proposed, approved, then due date moves one period |
-| T16 | Reserve a book. The reservation expires | Hold placed. When it expires, the book goes back to `Available` automatically |
-| T17 | Book can't be found | Agent doesn't blame the student. It suggests the librarian decide on `Lost` |
-| T18 | Delete a record | Only with human approval and a reason. It is a soft delete and appears in the audit log |
-| T19 | Human overrides an agent decision | Correction logged with the original decision, fix, reason and date |
-| T20 | Question the agent can't answer (e.g. a book that isn't in the catalogue) | Searches, checks the database, asks or escalates, then says "I don't know". It doesn't make anything up |
+| 1 | Check book availability | Correct status shown |
+| 2 | Borrow a book | Correct details saved |
+| 3 | Return a book | Status updated |
+| 4 | Book overdue | Reminder sent |
+| 5 | Book damaged | Agent asks for a human decision |
 
-Extra cases worth adding later: dictated input with a misheard name, duplicate entries, a password in the input (must not be stored), and two operators approving the same action at once.
+---
 
-## 12. Open decisions
+## Open decisions
 
-| ID | Decision | Options | Recommendation |
+| # | Topic | Issue | Suggested resolution |
 |---|---|---|---|
-| D1 | Reminders: fully automatic or confirmed? | Auto / confirm each / auto with a daily digest | Automatic for standard reminders. School emails sent automatically from a fixed template, with a daily digest to the committee |
-| D2 | Borrowing approval: every borrowing or only exceptions? | Every / exceptions only | Approve **every** borrowing at launch. Move to exceptions-only (over the limit, overdue history, unpaid fines) once accuracy targets are met |
-| D3 | Overdue days before emailing the school (N) | — | 7 days |
-| D4 | Reservation expiry window | — | 2 school days |
-| D5 | Handling a borrowing that doesn't start on a Friday | Next Friday ≥ 7 days / exactly 7 days | Next Friday ≥ 7 days |
+| 1 | Reminders | Layer 6 says confirm first; Layer 9 says automatic | Standard due-date reminders are automatic. Custom or escalated reminders need confirmation. |
+| 2 | Fines | When the pay-up message is sent | The agent drafts the pay-up message but sends it only after a human sets the amount. |
+| 3 | Borrowing approval | Layer 9 says a human approves every borrowing; the Layer 3 transitions suggest only exceptions | To be decided |
+| 4 | Damage recording | Rated medium risk in Layer 6 | Raise the risk rating from medium to high |
+| 5 | Missing tools | No tools yet for some actions | Add tools for reservations, renewals, marking lost, and human-approved deletion |
 
-**Resolved in this version:**
-- Fines: the fine message is sent only after a human sets the amount (§7.1).
-- Damage recording raised from Medium to **High** risk (§7.1).
-- Missing tools added: reservations, renewals, marking lost, approved deletion (§7.1).
-- Memory architecture drawing added (§5.3).
-- Test cases expanded to 20 (§11).
+## Still to do
 
-## 13. Still to do
-
-- [ ] Committee answers D1–D5
-- [ ] Replace the draft test cases with the 5 already written, then review the other 15
-- [ ] Confirm loan limits and fine amounts from the library rules
-- [ ] Write the school escalation email and fine message templates
-- [ ] Choose the database and notification (email) provider
+- [ ] Memory architecture drawing
+- [ ] 15 more test cases
