@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Approvals{% endblock %}
+{% block content %}
+<h1>Waiting for approval</h1>
+{% for a in actions %}
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <b>#{{ a.action_id }} · {{ a.tool | replace('_', ' ') | capitalize }}</b>
+    <span class="badge pending">pending</span>
+  </div>
+  <table>
+    {% set d = a.details %}
+    {% if d.student_name %}<tr><th>Student</th><td>{{ d.student_name }}, grade {{ d.grade }} ({{ d.student_id }})</td></tr>{% endif %}
+    {% if d.book_name %}<tr><th>Book</th><td>{{ d.book_name }} ({{ d.book_id }})</td></tr>{% endif %}
+    {% if d.take_date %}<tr><th>Borrowed</th><td>{{ d.take_date }}</td></tr>{% endif %}
+    {% if d.due_date %}<tr><th>Due</th><td>{{ d.due_date }}{% if d.new_due_date %} → <b>{{ d.new_due_date }}</b>{% endif %}</td></tr>{% endif %}
+    {% if d.condition %}<tr><th>Condition</th><td>{{ d.condition }}{% if d.notes %}: {{ d.notes }}{% endif %}</td></tr>{% endif %}
+    <tr><th>Suggested</th><td>{{ a.reason }}<br><span class="muted">by {{ a.suggested_by }}, {{ a.created_at }}</span></td></tr>
+  </table>
+  {% if a.flags %}<div class="alert" style="margin-top:.8rem"><b>Check before approving:</b>
+    <ul>{% for f in a.flags %}<li>{{ f }}</li>{% endfor %}</ul></div>{% endif %}
+  <div class="row" style="margin-top:.8rem">
+    <form method="post" action="/approvals/{{ a.action_id }}/approve">
+      <button>{{ 'Mark handled' if a.tool == 'escalate_to_librarian' else 'Approve' }}</button>
+    </form>
+    <form method="post" action="/approvals/{{ a.action_id }}/reject" class="row">
+      <input name="reason" placeholder="Reason for rejecting" required>
+      <button class="danger">Reject</button>
+    </form>
+  </div>
+</div>
+{% else %}
+<p class="muted">Nothing is waiting for approval.</p>
+{% endfor %}
+{% endblock %}

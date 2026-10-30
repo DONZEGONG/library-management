@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Library{% endblock %} · School Library</title>
+<style>
+  :root { --ink:#1d2433; --muted:#5b6475; --line:#d9dde5; --bg:#f6f7f9; --accent:#2457c5; --red:#c62828; --redbg:#fdecec; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 system-ui, sans-serif; color:var(--ink); background:var(--bg); }
+  nav { display:flex; gap:1.2rem; align-items:center; padding:.7rem 1.2rem; background:#fff; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  nav a { color:var(--ink); text-decoration:none; } nav a:hover { color:var(--accent); }
+  nav .who { margin-left:auto; color:var(--muted); font-size:.9rem; }
+  main { max-width:1000px; margin:1.5rem auto; padding:0 1rem; }
+  h1 { font-size:1.4rem; margin:.2rem 0 1rem; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:1rem; margin-bottom:1rem; }
+  table { width:100%; border-collapse:collapse; background:#fff; }
+  th, td { text-align:left; padding:.45rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:.85rem; color:var(--muted); font-weight:600; }
+  input, select, textarea, button { font:inherit; padding:.45rem .6rem; border:1px solid var(--line); border-radius:6px; }
+  button { background:var(--accent); color:#fff; border-color:var(--accent); cursor:pointer; }
+  button.secondary { background:#fff; color:var(--ink); border-color:var(--line); }
+  button.danger { background:var(--red); border-color:var(--red); }
+  .badge { display:inline-block; padding:.05rem .5rem; border-radius:99px; font-size:.8rem; background:#eef1f6; }
+  .badge.pending { background:var(--accent); color:#fff; }
+  .alert { background:var(--redbg); border:1px solid var(--red); color:var(--red); border-radius:8px; padding:.8rem 1rem; margin-bottom:1rem; }
+  .msg { background:#e8f1ff; border:1px solid var(--accent); border-radius:8px; padding:.6rem 1rem; margin-bottom:1rem; }
+  .status-Overdue { color:var(--red); font-weight:600; }
+  .muted { color:var(--muted); font-size:.9rem; }
+  .row { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
+  .stats { display:flex; gap:1rem; flex-wrap:wrap; }
+  .stat { background:#fff; border:1px solid var(--line); border-radius:8px; padding:.8rem 1.2rem; min-width:140px; }
+  .stat b { display:block; font-size:1.6rem; }
+</style>
+</head>
+<body>
+{% if user %}
+<nav>
+  <a href="/"><b>School Library</b></a>
+  <a href="/">Chat</a>
+  <a href="/approvals">Approvals</a>
+  <a href="/register">Register</a>
+  {% if user.role == 'librarian' %}<a href="/librarian">Librarian tools</a>{% endif %}
+  <a href="/corrections">Correction log</a>
+  <span class="who">{{ user.name }} ({{ user.role }}) · <a href="/logout">sign out</a></span>
+</nav>
+{% endif %}
+<main>
+{% if message %}<div class="msg">{{ message }}</div>{% endif %}
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>
