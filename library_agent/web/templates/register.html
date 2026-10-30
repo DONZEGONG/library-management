@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+<h1>Library register</h1>
+<div class="stats">
+  <div class="stat"><b>{{ totals.total_books }}</b>total books</div>
+  <div class="stat"><b>{{ totals.current_books }}</b>in the library now</div>
+  {% for s, n in totals.by_status.items() %}<div class="stat"><b>{{ n }}</b>{{ s }}</div>{% endfor %}
+</div>
+<br>
+{% if overdue %}
+<div class="alert"><b>Red alert: {{ overdue | length }} book(s) overdue</b>
+  <ul>{% for o in overdue %}<li>{{ o.name }} ({{ o.book_id }}), {{ o.student_name }}, grade {{ o.grade }}, due {{ o.due_date }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+<table>
+  <tr><th>Book ID</th><th>Name</th><th>Author</th><th>Copy</th><th>Status</th><th>With</th><th>Due</th></tr>
+  {% for b in books %}
+  <tr>
+    <td>{{ b.book_id }}</td><td>{{ b.name }}</td><td>{{ b.author }}</td><td>{{ b.copy_number }}</td>
+    <td class="status-{{ b.status }}">{{ b.status }}</td>
+    <td>{% if b.student_name %}{{ b.student_name }} ({{ b.grade }}){% endif %}</td>
+    <td>{{ b.due_date or '' }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="muted">No books yet. Import the catalogue with <code>python -m library_agent import-books books.csv</code>.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

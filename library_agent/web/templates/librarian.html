@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Librarian tools{% endblock %}
+{% block content %}
+<h1>Librarian tools</h1>
+<p class="muted">Only the librarian sees this page. Every action needs a reason and is recorded.</p>
+
+{% if drafts %}
+<div class="card"><b>Pay-up messages waiting for an amount</b>
+  <ul>{% for d in drafts %}<li>Loan #{{ d.loan_id }}: {{ d.book_name }} — set the fine below to send it.</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="card"><b>Set a fine</b> <span class="muted">(sends any drafted pay-up message)</span>
+  <form method="post" action="/librarian/fine" class="row">
+    <input name="loan_id" placeholder="Loan #" required size="6">
+    <input name="amount" type="number" step="0.01" min="0.01" placeholder="Amount" required>
+    <input name="reason" placeholder="Reason" required style="flex:1">
+    <button>Set fine</button>
+  </form>
+</div>
+
+<div class="card"><b>Recent fines</b>
+  <table>
+    <tr><th>#</th><th>Loan</th><th>Book</th><th>Student</th><th>Amount</th><th>Status</th><th>Update</th></tr>
+    {% for f in fines %}
+    <tr><td>{{ f.fine_id }}</td><td>{{ f.loan_id }}</td><td>{{ f.book_name }}</td><td>{{ f.student_name }}</td>
+      <td>{{ '%.2f' % f.amount }}</td><td>{{ f.status }}</td>
+      <td>{% if f.status in ('unpaid', 'reduced') %}
+        <form method="post" action="/librarian/fine/{{ f.fine_id }}" class="row">
+          <select name="status"><option>paid</option><option>waived</option><option>reduced</option></select>
+          <input name="new_amount" type="number" step="0.01" placeholder="New amount" size="6">
+          <input name="reason" placeholder="Reason" required>
+          <button class="secondary">Save</button>
+        </form>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="7" class="muted">No fines.</td></tr>{% endfor %}
+  </table>
+</div>
+
+<div class="card"><b>Change a due date</b> <span class="muted">(for example around festivals)</span>
+  <form method="post" action="/librarian/due-date" class="row">
+    <input name="loan_id" placeholder="Loan #" required size="6">
+    <input name="new_due" type="date" required>
+    <input name="reason" placeholder="Reason" required style="flex:1">
+    <button>Change</button>
+  </form>
+</div>
+
+<div class="card"><b>Mark a book lost</b>
+  <form method="post" action="/librarian/lost" class="row">
+    <input name="book_id" placeholder="Book ID" required>
+    <input name="reason" placeholder="Reason" required style="flex:1">
+    <button class="danger">Mark lost</button>
+  </form>
+</div>
+
+<div class="card"><b>Resolve a lost or damaged book</b>
+  <form method="post" action="/librarian/resolve" class="row">
+    <input name="book_id" placeholder="Book ID" required>
+    <select name="outcome">
+      <option value="repaired">Repaired (back on shelf)</option>
+      <option value="replaced">Replaced or paid for (back on shelf)</option>
+      <option value="write_off">Cannot be repaired (mark lost)</option>
+      <option value="keep_damaged">Keep out of circulation</option>
+    </select>
+    <input name="reason" placeholder="Reason" required style="flex:1">
+    <button>Save</button>
+  </form>
+</div>
+
+<div class="card"><b>Correct a book's state</b> <span class="muted">(written to the correction log)</span>
+  <form method="post" action="/librarian/correct" class="row">
+    <input name="book_id" placeholder="Book ID" required>
+    <select name="new_status">
+      {% for s in ['Available','Borrowed','Reserved','Overdue','Returned','Lost','Damaged'] %}<option>{{ s }}</option>{% endfor %}
+    </select>
+    <input name="reason" placeholder="Reason" required style="flex:1">
+    <button>Correct</button>
+  </form>
+</div>
+
+<div class="card"><b>Delete a record</b> <span class="muted">(hidden from the register, kept for the audit)</span>
+  <form method="post" action="/librarian/delete" class="row">
+    <select name="table"><option value="books">Book</option><option value="students">Student</option><option value="loans">Loan</option></select>
+    <input name="record_id" placeholder="ID" required>
+    <input name="reason" placeholder="Reason" required style="flex:1">
+    <button class="danger">Delete</button>
+  </form>
+</div>
+{% endblock %}

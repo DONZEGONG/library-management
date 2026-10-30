@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Chat{% endblock %}
+{% block content %}
+<div class="row" style="justify-content:space-between">
+  <h1>Ask the library agent</h1>
+  <form method="post" action="/chat/new"><button class="secondary">New conversation</button></form>
+</div>
+{% if pending %}<div class="msg"><a href="/approvals">{{ pending }} action(s) waiting for approval</a></div>{% endif %}
+<div class="card" id="log">
+  {% for speaker, text in transcript %}
+    {% if not text.startswith('[Approvals update') %}
+    <p style="white-space:pre-wrap"><b>{{ 'You' if speaker == 'user' else 'Agent' }}:</b> {{ text.split(']\n', 1)[-1] if speaker == 'user' else text }}</p>
+    {% endif %}
+  {% else %}
+    <p class="muted">Try: "Asha Rao, grade 7, is borrowing B-102" or "Is Charlotte's Web in?"
+    Don't type passwords here.</p>
+  {% endfor %}
+</div>
+<form method="post" action="/chat" class="row" id="chat-form">
+  <input name="message" id="message" style="flex:1" autocomplete="off" placeholder="Type or press the microphone" autofocus>
+  <button type="button" class="secondary" id="mic" title="Dictate">🎤</button>
+  <button>Send</button>
+</form>
+<p class="muted" id="mic-status"></p>
+<script>
+// Voice entry (PLAN 5.1): the browser's own speech-to-text fills the box.
+const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const mic = document.getElementById('mic'), box = document.getElementById('message'),
+      status = document.getElementById('mic-status');
+if (!Rec) { mic.disabled = true; mic.title = 'Voice entry is not supported in this browser'; }
+else {
+  const rec = new Rec(); rec.lang = 'en-IN'; rec.interimResults = true;
+  rec.onresult = e => { box.value = Array.from(e.results).map(r => r[0].transcript).join(' '); };
+  rec.onstart = () => status.textContent = 'Listening… check the text, then press Send.';
+  rec.onend = () => status.textContent = '';
+  mic.onclick = () => rec.start();
+}
+document.getElementById('chat-form').onsubmit = () => { status.textContent = 'The agent is working…'; };
+</script>
+{% endblock %}

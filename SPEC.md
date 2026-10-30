@@ -108,6 +108,27 @@ stateDiagram-v2
 - A student's past damaged book must **not** automatically mean that a newly damaged book can't be repaired.
 - A past renewal approval can guide similar cases, but the current reservation status and due date must still be checked.
 
+### Memory architecture
+
+```mermaid
+flowchart LR
+    U[Committee member<br/>chat or voice] -->|passwords stripped| A[AI agent]
+    A -->|read tools| R[(Register<br/>books, students,<br/>loans, reservations, fines)]
+    A -->|write tools| P[(Pending actions)]
+    P -->|approve / reject| H[Committee member]
+    H -->|approved| R
+    H -->|rejected| C[(Correction log<br/>append-only)]
+    L[Librarian] -->|fines, due dates, lost,<br/>delete, corrections| R
+    L --> C
+    H --> D[(Human decisions<br/>approvals, renewals, waivers,<br/>lost, damage)]
+    L --> D
+    D -->|guidance only| A
+    K[Knowledge files<br/>rules, limits, repair,<br/>fine policy: librarian only] --> A
+    J[Daily job] -->|overdue, reservation expiry| R
+    J --> N[(Notifications<br/>sent once each)]
+    A -.->|every call| T[(Tool call audit)]
+```
+
 ### Never store
 
 - Passwords or login credentials
@@ -265,7 +286,26 @@ flowchart LR
 | 4 | Damage recording | Rated medium risk in Layer 6 | Raise the risk rating from medium to high |
 | 5 | Missing tools | No tools yet for some actions | Add tools for reservations, renewals, marking lost, and human-approved deletion |
 
+### Provisional answers used in the first build
+
+These are the suggested resolutions, built in so work could start. **The committee still needs
+to confirm them.** Policy numbers can be changed in settings without a code change (see README).
+
+| Topic | Built as |
+|---|---|
+| Reminders | Standard due-date and overdue reminders are sent automatically by the daily job |
+| Fines | The pay-up message is drafted when damage is approved, and sent only after the librarian sets the amount |
+| Borrowing approval | Every borrowing is approved by a committee member (first term) |
+| Damage recording | High risk: needs approval, and the book is blocked from other actions until decided |
+| Loan limit | 2 books per student. Going over is flagged, not refused. |
+| Renewals | 1 per loan, adding 7 days. Not allowed if another student has reserved the book. |
+| Reservation hold | 3 days, then the book goes back to Available automatically |
+| School email | After 7 days overdue, one email listing the unreturned books |
+| School mail ID | Placeholder `office@school.example` (setting `SCHOOL_EMAIL`) |
+| Festival due dates | Librarian only, recorded in the correction log |
+| Extra transitions | `Overdue → Lost` and `Overdue → Damaged` (human) were added, so an overdue book can be reported lost or returned damaged without a librarian override |
+
 ## Still to do
 
-- [ ] Memory architecture drawing
+- [x] Memory architecture drawing (Layer 4)
 - [ ] 15 more test cases

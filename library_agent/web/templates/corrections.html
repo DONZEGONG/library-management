@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Correction log{% endblock %}
+{% block content %}
+<h1>Correction log</h1>
+<p class="muted">Read-only. Entries can be added but never edited or deleted.</p>
+<table>
+  <tr><th>Date</th><th>Original AI decision</th><th>Human correction</th><th>Reason</th><th>By</th></tr>
+  {% for r in rows %}
+  <tr><td>{{ r.date }}</td><td>{{ r.original_decision }}</td><td>{{ r.human_correction }}</td><td>{{ r.reason }}</td><td>{{ r.corrected_by }}</td></tr>
+  {% else %}<tr><td colspan="5" class="muted">No corrections yet.</td></tr>{% endfor %}
+</table>
+{% endblock %}
