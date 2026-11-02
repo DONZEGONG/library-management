@@ -49,6 +49,26 @@ Run once a day with Windows Task Scheduler (or cron). It is safe to run twice:
 Point `BACKUP_DIR` at a folder that syncs to cloud storage. Restore with
 `python -m library_agent restore backups\library-YYYY-MM-DD.db`.
 
+To register both as daily Windows scheduled tasks (daily job at 07:00, backup at 18:00,
+logs in `logs\`), run once on the school machine:
+
+```powershell
+.\scripts\schedule-tasks.ps1 -BackupDir "C:\Users\<you>\OneDrive\LibraryBackups"
+# optional: -EnvFile settings.env (NAME=value lines, e.g. SMTP_HOST), -DailyJobTime, -BackupTime
+# remove them again with: .\scripts\schedule-tasks.ps1 -Remove
+```
+
+## Trial week and monthly review
+
+```powershell
+.\.venv\Scripts\python.exe -m library_agent shelf-check shelf.csv   # every book's status, to tick off against the shelf
+.\.venv\Scripts\python.exe -m library_agent report --from 2026-11-09 --to 2026-11-13
+```
+
+`report` (default: the last 30 days) shows proposals per tool, how many a human rejected,
+librarian corrections, the median wait for approval, and every rejection and correction to
+review. Use it for the trial week (PLAN 6.2, 6.3) and the monthly correction-log review (PLAN 7.4).
+
 ## Settings (environment variables)
 
 | Variable | Default | Meaning |
