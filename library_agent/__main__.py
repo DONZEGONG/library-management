@@ -8,12 +8,16 @@
   restore FILE.db              restore the database from a backup
   serve [--port 8000]          start the web app
   totals                       print total and current books
+  shelf-check FILE.csv         export every book's status to tick off against the shelf
+  report [--from D] [--to D]   proposals, rejections, corrections and approval wait times
+                               (default: the last 30 days)
 """
 import argparse
 import json
+from datetime import date, timedelta
 
 from . import backup as backups
-from . import importer, jobs, register
+from . import importer, jobs, register, reports
 from .config import settings
 from .db import connect, init_db
 from .notifications import Mailer
@@ -29,6 +33,10 @@ def main(argv=None):
     sub.add_parser("backup")
     sub.add_parser("restore").add_argument("file")
     sub.add_parser("totals")
+    sub.add_parser("shelf-check").add_argument("file")
+    r = sub.add_parser("report")
+    r.add_argument("--from", dest="start", type=date.fromisoformat)
+    r.add_argument("--to", dest="end", type=date.fromisoformat)
     s = sub.add_parser("serve")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8000)
@@ -59,6 +67,12 @@ def main(argv=None):
         print(f"Backed up to {backups.backup(settings.db_path, settings.backup_dir)}")
     elif args.cmd == "totals":
         print(json.dumps(register.totals(conn), indent=2))
+    elif args.cmd == "shelf-check":
+        print(f"Wrote {reports.write_shelf_check(conn, args.file)} book(s) to {args.file}")
+    elif args.cmd == "report":
+        end = args.end or date.today()
+        start = args.start or end - timedelta(days=30)
+        print(reports.format_report(reports.period_report(conn, start, end)))
     conn.close()
 
 

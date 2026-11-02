@@ -62,6 +62,8 @@ The agent manages the **library register** and the process of taking and returni
 | Lost | Available | The student replaces or pays for the book | Human |
 | Damaged | Available | Repaired | Human |
 | Damaged | Lost / Damaged | It cannot be repaired | Human |
+| Overdue | Lost | Reported lost while overdue *(provisional)* | Human |
+| Overdue | Damaged | Returned damaged while overdue *(provisional)* | Human |
 | *Any* | *Any* | A librarian corrects it | Librarian |
 
 ```mermaid
@@ -80,6 +82,8 @@ stateDiagram-v2
     Lost --> Available : replaced or paid (human)
     Damaged --> Available : repaired (human)
     Damaged --> Lost : cannot be repaired (human)
+    Overdue --> Lost : reported lost (human, provisional)
+    Overdue --> Damaged : returned damaged (human, provisional)
 ```
 
 **Always tracked:** registration data, due-date notices, new books, book status and availability, fine details, and damage reports.

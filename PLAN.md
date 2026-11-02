@@ -169,6 +169,7 @@ The 5 written test cases plus 15 new ones. These 15 also complete the "15 more t
 - [x] **6.1** Automate all 20 as pytest tests
 - [ ] **6.2** Do a one-week trial alongside the paper register and compare the two
 - [ ] **6.3** Measure success (Layer 10): spot-check accuracy against the shelf, count errors, and time each entry against the paper register
+  - *Built for 6.2 and 6.3:* `shelf-check FILE.csv` exports every book's status and holder to tick off against the shelf, and `report --from --to` counts proposals, human rejections and librarian corrections, with the median wait for approval. Still to do: run the trial week and time paper entries by hand for comparison.
 
 **Done when:** all 20 tests pass, and the trial week shows fewer errors and less time spent than the paper register.
 
@@ -177,10 +178,11 @@ The 5 written test cases plus 15 new ones. These 15 also complete the "15 more t
 ## Phase 7: Launch and backup
 
 - [ ] **7.1** Back up the database to cloud storage every day, and test restoring it once
-  - *Built:* `backup` and `restore` commands, with an automated restore test. Still to do: schedule the backup daily into a cloud-synced folder, and test a restore on the school machine.
+  - *Built:* `backup` and `restore` commands, with an automated restore test, and `scripts/schedule-tasks.ps1`, which registers the daily job and the backup as Windows scheduled tasks writing to a cloud-synced folder. Still to do: run the script on the school machine and test a restore there.
 - [x] **7.2** A one-page guide for committee members: how to register, return, approve and handle alerts
 - [ ] **7.3** Go live, keeping the paper register for the first two weeks as a fallback
 - [ ] **7.4** Review the correction log monthly to see where the agent gets things wrong
+  - *Built:* `report` lists every rejection and correction in a date range (default: the last 30 days). Still to do: the monthly review itself.
 
 ---
 
