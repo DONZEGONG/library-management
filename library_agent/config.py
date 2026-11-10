@@ -35,7 +35,10 @@ class Settings:
     smtp_password: str = os.environ.get("SMTP_PASSWORD", "")  # read from env, never stored in the DB
     mail_from: str = os.environ.get("MAIL_FROM", "library@school.example")
 
-    # Agent
+    # Agent. AI_PROVIDER "none" (default) runs the library from the Desk page
+    # only, with no AI and no API costs. "anthropic" turns on the AI chat and
+    # needs ANTHROPIC_API_KEY plus `pip install -r requirements-ai.txt`.
+    ai_provider: str = os.environ.get("AI_PROVIDER", "none").strip().lower()
     model: str = os.environ.get("LIBRARY_AGENT_MODEL", "claude-opus-5-5")
     agent_max_steps: int = _int("AGENT_MAX_STEPS", 8)
 

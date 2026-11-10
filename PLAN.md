@@ -135,7 +135,9 @@ Every tool records who used it and when. Write tools never change records direct
 - [ ] **5.7 Committee login:** each committee member signs in so approvals record a real name. The library app does not store passwords itself. Use the school's existing accounts or a simple shared sign-in service.
   - *Built:* `AUTH_MODE=header` takes the signed-in email from a school sign-in proxy and checks it against `members.csv`. `AUTH_MODE=dev` (pick a name) is for local testing only. Still to do: connect the school's sign-in service.
 
-**Done when:** a committee member can register a borrowing by voice, approve it, and see the register update.
+- [x] **5.8 Desk page (no AI needed):** forms for borrow, return (good or damaged), renew, reserve and refer to the librarian, plus a book and student look-up. Each form calls the same tools as the agent, so every check, the audit log and Approvals stay the same; approvals show "Desk entry by <name>". The AI chat is optional (`AI_PROVIDER=anthropic`); by default it is off and the home page opens the Desk. Decided 2026-11-10 to avoid API costs; the facilitator agreed.
+
+**Done when:** a committee member can register a borrowing on the Desk (or by voice when the AI chat is on), approve it, and see the register update.
 
 ---
 

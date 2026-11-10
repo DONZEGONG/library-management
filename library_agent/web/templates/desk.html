@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Desk{% endblock %}
+{% block content %}
+<style>
+  .desk { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1rem; }
+  .desk .card { margin:0; }
+  .desk h2 { font-size:1.05rem; margin:0 0 .6rem; }
+  .desk label { display:block; font-size:.85rem; color:var(--muted); margin:.4rem 0 .15rem; }
+  .desk input, .desk select, .desk textarea { width:100%; }
+  .desk button { margin-top:.7rem; }
+</style>
+<h1>Library desk</h1>
+{% if pending %}<div class="msg"><a href="/approvals">{{ pending }} entry(s) waiting for approval</a></div>{% endif %}
+
+<div class="card">
+  <form method="get" action="/desk" class="row">
+    <input name="q" value="{{ q }}" style="flex:1" placeholder="Look up a book name, author, book ID, student name or student ID">
+    <button class="secondary">Look up</button>
+  </form>
+  {% if books is not none %}
+  <h2 style="font-size:1rem;margin:1rem 0 .4rem">Books</h2>
+  {% if books %}
+  <table>
+    <tr><th>Book ID</th><th>Name</th><th>Author</th><th>Status</th></tr>
+    {% for b in books %}
+    <tr><td>{{ b.book_id }}</td><td>{{ b.name }}{% if b.copy_number %} <span class="muted">copy {{ b.copy_number }}</span>{% endif %}</td>
+        <td>{{ b.author }}</td><td class="status-{{ b.status }}">{{ b.status }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No books match.</p>{% endif %}
+  <h2 style="font-size:1rem;margin:1rem 0 .4rem">Students</h2>
+  {% if students %}
+  <table>
+    <tr><th>Student ID</th><th>Name</th><th>Grade</th></tr>
+    {% for s in students %}<tr><td>{{ s.student_id }}</td><td>{{ s.name }}</td><td>{{ s.grade }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<p class="muted">No students match.</p>{% endif %}
+  {% endif %}
+</div>
+
+<p class="muted">Borrowings, returns and renewals wait in <a href="/approvals">Approvals</a> until a
+committee member approves them. Reservations are saved straight away.</p>
+
+<div class="desk">
+  <form method="post" action="/desk/borrow" class="card">
+    <h2>Borrow</h2>
+    <label for="b-book">Book ID</label><input id="b-book" name="book_id" required placeholder="B-101">
+    <label for="b-student">Student ID or name</label><input id="b-student" name="student" required placeholder="S-001">
+    <button>Send for approval</button>
+  </form>
+
+  <form method="post" action="/desk/return" class="card">
+    <h2>Return</h2>
+    <label for="r-book">Book ID</label><input id="r-book" name="book_id" required>
+    <label for="r-cond">Condition</label>
+    <select id="r-cond" name="condition"><option value="good">Good</option><option value="damaged">Damaged</option></select>
+    <label for="r-notes">Notes (describe any damage)</label><textarea id="r-notes" name="notes" rows="2"></textarea>
+    <button>Send for approval</button>
+  </form>
+
+  <form method="post" action="/desk/renew" class="card">
+    <h2>Renew</h2>
+    <label for="n-book">Book ID</label><input id="n-book" name="book_id" required>
+    <button>Send for approval</button>
+  </form>
+
+  <form method="post" action="/desk/reserve" class="card">
+    <h2>Reserve</h2>
+    <label for="v-book">Book ID</label><input id="v-book" name="book_id" required>
+    <label for="v-student">Student ID or name</label><input id="v-student" name="student" required>
+    <button>Reserve</button>
+  </form>
+
+  <form method="post" action="/desk/refer" class="card">
+    <h2>Refer to the librarian</h2>
+    <p class="muted" style="margin:0">Fines, due-date changes, lost books, corrections, or anything unsure.</p>
+    <label for="f-notes">What happened</label><textarea id="f-notes" name="notes" rows="2" required></textarea>
+    <label for="f-book">Book ID (optional)</label><input id="f-book" name="book_id">
+    <label for="f-student">Student ID (optional)</label><input id="f-student" name="student">
+    <button>Send to librarian</button>
+  </form>
+</div>
+{% endblock %}

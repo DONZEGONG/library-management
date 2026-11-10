@@ -28,6 +28,11 @@ class ToolContext:
     role: str = "committee"          # "committee" or "librarian"
     session_id: str | None = None
     today: date = field(default_factory=date.today)
+    via: str = "agent"               # "agent" (AI chat) or "desk" (typed into the Desk page)
+
+    @property
+    def suggested_by(self) -> str:
+        return f"Desk entry by {self.actor}" if self.via == "desk" else f"AI agent (for {self.actor})"
 
 
 class ToolError(Exception):
@@ -74,7 +79,7 @@ def propose(ctx: ToolContext, tool: str, details: dict, reason: str, flags: list
     cur = ctx.conn.execute(
         "INSERT INTO pending_actions (tool, details, suggested_by, reason, flags, session_id, created_at)"
         " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (tool, json.dumps(details), f"AI agent (for {ctx.actor})", reason,
+        (tool, json.dumps(details), ctx.suggested_by, reason,
          json.dumps(flags or []), ctx.session_id, now()),
     )
     ctx.conn.commit()

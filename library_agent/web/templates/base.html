@@ -37,7 +37,8 @@
 {% if user %}
 <nav>
   <a href="/"><b>School Library</b></a>
-  <a href="/">Chat</a>
+  <a href="/desk">Desk</a>
+  {% if ai_enabled %}<a href="/">Chat</a>{% endif %}
   <a href="/approvals">Approvals</a>
   <a href="/register">Register</a>
   {% if user.role == 'librarian' %}<a href="/librarian">Librarian tools</a>{% endif %}
