@@ -1,9 +1,10 @@
 # AI Library Management Agent
 
-A web app over a library database for a school library committee. A Claude-powered agent
-answers questions and proposes borrowings, returns, damage reports and renewals. Every
-higher-risk change waits for a committee member to approve it. See [SPEC.md](SPEC.md) and
-[PLAN.md](PLAN.md).
+A web app over a library database for a school library committee. Committee members record
+borrowings, returns, damage reports, renewals and reservations on the **Desk** page. Every
+higher-risk change waits for a committee member to approve it. An optional Claude-powered chat
+agent can do the same by typed or spoken request (see "Optional AI chat" below); it is off by
+default so the app runs with no API costs. See [SPEC.md](SPEC.md) and [PLAN.md](PLAN.md).
 
 ## Setup
 
@@ -14,11 +15,18 @@ python -m venv .venv
 #   --use-feature=truststore
 ```
 
-Set your Claude API key (from https://console.anthropic.com):
+## Optional AI chat
+
+The app works fully without AI. To turn on the chat agent (paid per use):
 
 ```powershell
-$env:ANTHROPIC_API_KEY = "sk-ant-..."
+.\.venv\Scripts\python.exe -m pip install -r requirements-ai.txt
+$env:AI_PROVIDER = "anthropic"
+$env:ANTHROPIC_API_KEY = "sk-ant-..."    # from https://console.anthropic.com
 ```
+
+The home page then opens the Chat; the Desk stays available. Unset `AI_PROVIDER` (or set it to
+`none`) to switch the chat off again.
 
 ## First run
 
@@ -83,7 +91,8 @@ review. Use it for the trial week (PLAN 6.2, 6.3) and the monthly correction-log
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | | School email server. With no `SMTP_HOST`, messages are only recorded in the database. |
 | `AUTH_MODE` | `dev` | `dev` = pick your name (local testing only). `header` = a school sign-in proxy passes the signed-in email in `AUTH_HEADER`. |
 | `SESSION_SECRET` | `change-me` | Set a long random value in real use |
-| `LIBRARY_AGENT_MODEL` | `claude-opus-5-5` | Claude model |
+| `AI_PROVIDER` | `none` | `none` = Desk only, no AI. `anthropic` = also turn on the AI chat. |
+| `LIBRARY_AGENT_MODEL` | `claude-opus-5-5` | Claude model (only when the AI chat is on) |
 
 ## Tests
 
@@ -100,7 +109,7 @@ cases from PLAN Phase 6.
 |---|---|
 | `library_agent/db.py` | Tables (PLAN 1.1). The correction log cannot be edited or deleted. |
 | `library_agent/states.py` | The 7 book states and allowed transitions (Layer 3) |
-| `library_agent/tools.py` | The agent's tools. Write tools create pending actions. |
+| `library_agent/tools.py` | The tools used by the Desk page and the agent. Write tools create pending actions. |
 | `library_agent/approvals.py` | Approve or reject pending actions |
 | `library_agent/librarian.py` | Human-only actions: fines, due dates, lost, delete, corrections |
 | `library_agent/jobs.py` | The daily job |

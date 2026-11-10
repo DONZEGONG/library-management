@@ -15,6 +15,7 @@ from ..agent import LibraryAgent
 from ..config import settings
 from ..db import connect, init_db
 from ..notifications import Mailer, PayupNotAllowed
+from ..tools import ToolContext, run_tool
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -35,10 +36,18 @@ def load_members(path: str) -> dict[str, dict]:
                 for r in csv.DictReader(f) if r.get("email")}
 
 
-def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | None = None) -> FastAPI:
+DESK_TOOLS = {"borrow": "save_borrowing_details", "return": "update_return_status",
+              "renew": "renew_loan", "reserve": "reserve_book", "refer": "escalate_to_librarian"}
+
+
+def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | None = None,
+               ai_enabled: bool | None = None) -> FastAPI:
     app = FastAPI(title="Library Management Agent")
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret)
     db_path = db_path or settings.db_path
+    if ai_enabled is None:
+        ai_enabled = settings.ai_provider == "anthropic"
+    TEMPLATES.env.globals["ai_enabled"] = ai_enabled
     mailer = mailer or Mailer()
     agent_factory = agent_factory or (lambda conn: LibraryAgent(conn))
 
@@ -96,10 +105,49 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
         request.session.clear()
         return RedirectResponse("/login", 303)
 
-    # ------------------------------------------------------------ chat (5.1)
+    # ------------------------------------------------------------ desk (no AI needed)
+
+    @app.get("/desk", response_class=HTMLResponse)
+    def desk_page(request: Request, q: str = "", user=Depends(current_user), conn=Depends(get_conn)):
+        books = students = None
+        if q.strip():
+            books = register.find_books(conn, q)
+            students = [{"student_id": s["student_id"], "name": s["name"], "grade": s["grade"]}
+                        for s in register.find_students(conn, q)]
+        return page(request, "desk.html", user, q=q, books=books, students=students,
+                    pending=len(approvals.list_pending(conn)), message=request.query_params.get("msg"))
+
+    @app.post("/desk/{task}")
+    def desk_entry(task: str, book_id: str = Form(""), student: str = Form(""),
+                   condition: str = Form("good"), notes: str = Form(""),
+                   user=Depends(current_user), conn=Depends(get_conn)):
+        if task not in DESK_TOOLS:
+            raise HTTPException(404)
+        book_id = book_id.strip().upper()
+        args = {"book_id": book_id}
+        if task in ("borrow", "reserve"):
+            args["student"] = student.strip()
+        elif task == "return":
+            args.update(condition=condition, notes=notes.strip())
+        elif task == "refer":
+            args = {"summary": notes.strip(), "book_id": book_id, "student_id": student.strip()}
+            if not args["summary"]:
+                return _redirect("/desk", "Write what the librarian needs to know.")
+        missing = [] if task == "refer" else [k for k in ("book_id", "student") if k in args and not args[k]]
+        if missing:
+            return _redirect("/desk", f"Please fill in: {', '.join(m.replace('_', ' ') for m in missing)}.")
+        ctx = ToolContext(conn, actor=user["name"], role=user["role"], via="desk")
+        result, is_error = run_tool(ctx, DESK_TOOLS[task], args)
+        if is_error:
+            return _redirect("/desk", f"Not saved: {result['error']}")
+        return _redirect("/desk", result["message"])
+
+    # ------------------------------------------------------------ chat (5.1, only when AI is on)
 
     @app.get("/", response_class=HTMLResponse)
     def chat_page(request: Request, user=Depends(current_user), conn=Depends(get_conn)):
+        if not ai_enabled:
+            return RedirectResponse("/desk", 303)
         agent = agent_factory(conn)
         sid = request.session.get("chat_session")
         if not sid or not conn.execute("SELECT 1 FROM chat_sessions WHERE session_id = ?", (sid,)).fetchone():
@@ -110,6 +158,8 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
 
     @app.post("/chat")
     def chat(request: Request, message: str = Form(...), user=Depends(current_user), conn=Depends(get_conn)):
+        if not ai_enabled:
+            raise HTTPException(404, "The AI chat is switched off. Use the Desk page.")
         sid = request.session.get("chat_session")
         if message.strip() and sid:
             agent = agent_factory(conn)
@@ -149,7 +199,7 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
             result = approvals.approve(conn, action_id, user["name"])
         except approvals.ApprovalError as e:
             return _redirect("/approvals", e)
-        if action["session_id"]:
+        if action["session_id"] and ai_enabled:
             background.add_task(_resume, action["session_id"],
                                 f"Action #{action_id} ({action['tool']}) was approved by {user['name']}. {result}")
         return _redirect("/approvals", result)
@@ -162,7 +212,7 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
         except approvals.ApprovalError as e:
             return _redirect("/approvals", e)
         action = approvals.get_action(conn, action_id)
-        if action["session_id"]:
+        if action["session_id"] and ai_enabled:
             background.add_task(_resume, action["session_id"],
                                 f"Action #{action_id} ({action['tool']}) was rejected by {user['name']}. "
                                 f"Reason: {reason}. Nothing was saved.")

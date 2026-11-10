@@ -177,6 +177,12 @@ flowchart LR
 | Update return status | High |
 | Record book damage | Medium *(open decision: raise to High)* |
 
+### Who calls the tools
+
+Committee members call the tools directly through forms on the Desk page. The AI agent can call the
+same tools from the chat, but it is optional and off by default (decided 2026-11-10 to avoid API
+costs; the facilitator agreed). Either way, write tools create pending actions that a human approves.
+
 ### Interfaces
 
 Website, document storage, internal API, notification service (reminders and overdue alerts), library database, learner records, cloud backup, and a calendar if needed.

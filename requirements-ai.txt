@@ -1,0 +1,4 @@
+# Only needed when AI_PROVIDER=anthropic (the optional AI chat).
+-r requirements.txt
+anthropic>=2.3
+truststore>=0.9
