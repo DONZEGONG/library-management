@@ -5,12 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Library{% endblock %} · School Library</title>
 <style>
-  :root { --ink:#1d2433; --muted:#5b6475; --line:#d9dde5; --bg:#f6f7f9; --accent:#2457c5; --red:#c62828; --redbg:#fdecec; }
+  :root { --ink:#1d2433; --muted:#5b6475; --line:#d9dde5; --bg:#f1f5fb; --brand-navy:#0f2944; --on-navy:#ffffff; --on-navy-muted:#c3cfe0; --accent:var(--brand-navy); --red:#c62828; --redbg:#fdecec; }
   * { box-sizing: border-box; }
   body { margin:0; font:16px/1.5 system-ui, sans-serif; color:var(--ink); background:var(--bg); }
-  nav { display:flex; gap:1.2rem; align-items:center; padding:.7rem 1.2rem; background:#fff; border-bottom:1px solid var(--line); flex-wrap:wrap; }
-  nav a { color:var(--ink); text-decoration:none; } nav a:hover { color:var(--accent); }
-  nav .who { margin-left:auto; color:var(--muted); font-size:.9rem; }
+  nav { display:flex; gap:1.2rem; align-items:center; padding:.6rem 1.2rem; background:var(--brand-navy); color:var(--on-navy); flex-wrap:wrap; }
+  nav a { color:var(--on-navy); text-decoration:none; } nav a:hover { text-decoration:underline; text-underline-offset:.2em; }
+  nav a:focus-visible { outline:2px solid var(--on-navy); outline-offset:3px; border-radius:4px; }
+  nav .brand { display:inline-flex; align-items:center; gap:.6rem; }
+  nav .brand img { width:36px; height:36px; border-radius:8px; background:var(--on-navy); }
+  nav .who { margin-left:auto; color:var(--on-navy-muted); font-size:.9rem; } nav .who a { color:var(--on-navy); }
   main { max-width:1000px; margin:1.5rem auto; padding:0 1rem; }
   h1 { font-size:1.4rem; margin:.2rem 0 1rem; }
   .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:1rem; margin-bottom:1rem; }
@@ -32,11 +35,12 @@
   .stat { background:#fff; border:1px solid var(--line); border-radius:8px; padding:.8rem 1.2rem; min-width:140px; }
   .stat b { display:block; font-size:1.6rem; }
 </style>
+{% block head %}{% endblock %}
 </head>
 <body>
 {% if user %}
 <nav>
-  <a href="/"><b>School Library</b></a>
+  <a class="brand" href="/"><img src="/static/logo-mark.png" alt="" width="36" height="36"><b>School Library</b></a>
   <a href="/desk">Desk</a>
   {% if ai_enabled %}<a href="/">Chat</a>{% endif %}
   <a href="/approvals">Approvals</a>
