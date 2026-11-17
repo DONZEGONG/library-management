@@ -55,9 +55,9 @@ def run_daily(conn: sqlite3.Connection, mailer: notifications.Mailer, today: dat
             summary["school_emails"] += 1
             for l in new:
                 conn.execute(
-                    "INSERT OR IGNORE INTO notifications (kind, dedup_key, recipient, subject, body,"
+                    "INSERT INTO notifications (kind, dedup_key, recipient, subject, body,"
                     " loan_id, status, created_at, sent_at) VALUES ('school_marker', ?, ?, '', '', ?,"
-                    " 'sent', ?, ?)",
+                    " 'sent', ?, ?) ON CONFLICT DO NOTHING",
                     (f"school:{l['loan_id']}:{l['due_date']}", settings.school_email, l["loan_id"], t, t),
                 )
 

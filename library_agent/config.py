@@ -11,13 +11,30 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _load_env_file(path: Path) -> None:
+    """Read NAME=value lines from settings.env (kept out of git) so secrets
+    such as DATABASE_URL live in one file. Real environment variables win."""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        os.environ.setdefault(name.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env_file(Path(os.environ.get("LIBRARY_ENV_FILE", BASE_DIR / "settings.env")))
+
+
 def _int(name: str, default: int) -> int:
     return int(os.environ.get(name, default))
 
 
 @dataclass
 class Settings:
-    db_path: str = os.environ.get("LIBRARY_DB", str(BASE_DIR / "library.db"))
+    # DATABASE_URL (PostgreSQL) wins; otherwise the SQLite file LIBRARY_DB.
+    db_path: str = os.environ.get("DATABASE_URL") or os.environ.get("LIBRARY_DB", str(BASE_DIR / "library.db"))
 
     # Policy numbers (Phase 0, open decision 5)
     loan_period_days: int = _int("LOAN_PERIOD_DAYS", 7)

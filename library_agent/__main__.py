@@ -5,7 +5,8 @@
   import-students FILE.csv     load or update the student list
   daily-job                    reminders, overdue alerts, school email, reservation expiry
   backup                       copy the database to BACKUP_DIR
-  restore FILE.db              restore the database from a backup
+  restore FILE.db              restore the database from a backup (replaces everything)
+  move-to-postgres [FILE.db]   copy library.db into the empty PostgreSQL database in DATABASE_URL
   serve [--port 8000]          start the web app
   totals                       print total and current books
   shelf-check FILE.csv         export every book's status to tick off against the shelf
@@ -19,7 +20,7 @@ from datetime import date, timedelta
 from . import backup as backups
 from . import importer, jobs, register, reports
 from .config import settings
-from .db import connect, init_db
+from .db import connect, describe, init_db
 from .notifications import Mailer
 
 
@@ -32,6 +33,7 @@ def main(argv=None):
     sub.add_parser("daily-job")
     sub.add_parser("backup")
     sub.add_parser("restore").add_argument("file")
+    sub.add_parser("move-to-postgres").add_argument("file", nargs="?", default="library.db")
     sub.add_parser("totals")
     sub.add_parser("shelf-check").add_argument("file")
     r = sub.add_parser("report")
@@ -50,13 +52,17 @@ def main(argv=None):
         return
     if args.cmd == "restore":
         backups.restore(args.file, settings.db_path)
-        print(f"Restored {settings.db_path} from {args.file}")
+        print(f"Restored {describe(settings.db_path)} from {args.file}")
+        return
+    if args.cmd == "move-to-postgres":
+        n = backups.move_to_postgres(args.file, settings.db_path)
+        print(f"Copied {n} row(s) from {args.file} to {describe(settings.db_path)}")
         return
 
     conn = connect()
     init_db(conn)
     if args.cmd == "init-db":
-        print(f"Database ready at {settings.db_path}")
+        print(f"Database ready at {describe(settings.db_path)}")
     elif args.cmd == "import-books":
         print(f"Imported {importer.import_books(conn, args.file)} book(s)")
     elif args.cmd == "import-students":

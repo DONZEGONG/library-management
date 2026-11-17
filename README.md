@@ -45,6 +45,30 @@ CSV columns:
 - `students.csv`: `student_id,name,grade,contact_email`
 - `members.csv`: `name,email,role` (role is `committee` or `librarian`)
 
+## Using PostgreSQL instead of library.db
+
+By default the data lives in the SQLite file `library.db`. To keep it in a hosted PostgreSQL
+database instead:
+
+1. Create a PostgreSQL database with your provider and copy its connection string, for example
+   `postgresql://library:PASSWORD@HOST:5432/library?sslmode=require`.
+2. Make a file called `settings.env` in this folder (git ignores it, so the password is never
+   pushed) with one line:
+   ```
+   DATABASE_URL=postgresql://library:PASSWORD@HOST:5432/library?sslmode=require
+   ```
+3. Install the driver (included in `requirements.txt`) and copy the existing data across once:
+   ```powershell
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+   .\.venv\Scripts\python.exe -m library_agent move-to-postgres library.db
+   ```
+   It refuses to run if the PostgreSQL database already has library data.
+4. Start the app as usual. `serve`, `daily-job`, `backup` and every other command now use
+   PostgreSQL. Delete or rename `settings.env` to go back to `library.db`.
+
+`backup` still writes a `library-YYYY-MM-DD.db` file, which `restore` can load back into
+PostgreSQL (it replaces all data there). Keep your provider's own backups switched on as well.
+
 ## Daily job and backup
 
 Run once a day with Windows Task Scheduler (or cron). It is safe to run twice:
@@ -82,6 +106,7 @@ review. Use it for the trial week (PLAN 6.2, 6.3) and the monthly correction-log
 | Variable | Default | Meaning |
 |---|---|---|
 | `LIBRARY_DB` | `library.db` | Database file |
+| `DATABASE_URL` | | PostgreSQL connection string. When set, it is used instead of `LIBRARY_DB`. Put it in `settings.env`. |
 | `LOAN_LIMIT` | 2 | Books per student *(provisional)* |
 | `MAX_RENEWALS` | 1 | Renewals per loan *(provisional)* |
 | `RESERVATION_HOLD_DAYS` | 3 | How long a reservation is held *(provisional)* |
@@ -100,7 +125,8 @@ review. Use it for the trial week (PLAN 6.2, 6.3) and the monthly correction-log
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-The tests use a fake AI client, so they need no API key. `tests/test_cases.py` holds the 20 test
+The tests use a fake AI client, so they need no API key. To run them against PostgreSQL too, set `TEST_DATABASE_URL` to a
+throwaway database (every table in it is dropped). `tests/test_cases.py` holds the 20 test
 cases from PLAN Phase 6.
 
 ## Layout

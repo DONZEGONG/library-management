@@ -1,6 +1,5 @@
 """The 20 test cases from PLAN Phase 6 (6.1)."""
 import json
-import sqlite3
 from datetime import date, timedelta
 
 import pytest
@@ -8,6 +7,7 @@ import pytest
 from conftest import FRIDAY, FakeClient, text_block, tool_block
 from library_agent import approvals, jobs, librarian, notifications, register, states
 from library_agent.agent import LibraryAgent
+from library_agent.db import DatabaseError
 from library_agent.tools import TOOLS, run_tool
 
 
@@ -245,10 +245,13 @@ def test_18_librarian_override_is_logged(ctx):
     assert "Available" in log["human_correction"]
     assert log["reason"].startswith("Book was found")
     assert log["date"]
-    with pytest.raises(sqlite3.DatabaseError):
+    with pytest.raises(DatabaseError):
         ctx.conn.execute("UPDATE correction_log SET reason = 'x'")
-    with pytest.raises(sqlite3.DatabaseError):
+    ctx.conn.rollback()
+    with pytest.raises(DatabaseError):
         ctx.conn.execute("DELETE FROM correction_log")
+    ctx.conn.rollback()
+    assert ctx.conn.execute("SELECT COUNT(*) FROM correction_log").fetchone()[0] == 1
 
 
 # 19

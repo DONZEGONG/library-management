@@ -36,7 +36,7 @@ def find_books(conn, query: str, limit: int = 20) -> list[dict]:
     like = f"%{query.strip()}%"
     rows = conn.execute(
         "SELECT book_id, name, author, copy_number, status FROM books"
-        " WHERE deleted_at IS NULL AND (book_id = ? OR name LIKE ? OR author LIKE ?)"
+        " WHERE deleted_at IS NULL AND (book_id = ? OR LOWER(name) LIKE LOWER(?) OR LOWER(author) LIKE LOWER(?))"
         " ORDER BY name, copy_number LIMIT ?",
         (query.strip(), like, like, limit),
     ).fetchall()
@@ -46,7 +46,7 @@ def find_books(conn, query: str, limit: int = 20) -> list[dict]:
 def find_students(conn, query: str, limit: int = 10) -> list:
     like = f"%{query.strip()}%"
     return conn.execute(
-        "SELECT * FROM students WHERE deleted_at IS NULL AND (student_id = ? OR name LIKE ?)"
+        "SELECT * FROM students WHERE deleted_at IS NULL AND (student_id = ? OR LOWER(name) LIKE LOWER(?))"
         " ORDER BY name LIMIT ?",
         (query.strip(), like, limit),
     ).fetchall()

@@ -93,13 +93,15 @@ def _borrow(conn, d, human, today, flags):
         raise ApprovalError(f"The book is now {book['status']}; it cannot be lent.")
     states.set_status(conn, d["book_id"], states.BORROWED)
     cur = conn.execute(
-        "INSERT INTO loans (book_id, student_id, take_date, due_date, approved_by) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO loans (book_id, student_id, take_date, due_date, approved_by) VALUES (?, ?, ?, ?, ?)"
+        " RETURNING loan_id",
         (d["book_id"], d["student_id"], d["take_date"], d["due_date"], human),
     )
+    loan_id = cur.fetchone()[0]
     if flags:
         states.record_decision(conn, "special_borrowing_approval",
                                f"Loan approved despite: {' '.join(flags)}", human,
-                               book_id=d["book_id"], student_id=d["student_id"], loan_id=cur.lastrowid)
+                               book_id=d["book_id"], student_id=d["student_id"], loan_id=loan_id)
     return f"Loan saved: {d['book_name']} to {d['student_name']}, due {d['due_date']}."
 
 

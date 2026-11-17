@@ -11,12 +11,12 @@ from library_agent.db import connect
 
 
 @pytest.fixture
-def web(tmp_path, monkeypatch):
+def web(tmp_path, db_target, monkeypatch):
     members = tmp_path / "members.csv"
     members.write_text("name,email,role\nLib Rarian,lib@s.example,librarian\nMem Ber,mem@s.example,committee\n")
     monkeypatch.setattr(settings, "members_file", str(members))
     monkeypatch.setattr(settings, "auth_mode", "dev")
-    db = str(tmp_path / "web.db")
+    db = db_target
     fake = FakeClient([
         [tool_block("save_borrowing_details", {"book_id": "B-101", "student": "S-001"})],
         [text_block("Action #1 is waiting for approval.")],
@@ -67,12 +67,12 @@ def test_reject_needs_reason(web):
 # ---------------------------------------------------------------- Desk (no AI)
 
 @pytest.fixture
-def desk(tmp_path, monkeypatch):
+def desk(tmp_path, db_target, monkeypatch):
     members = tmp_path / "members.csv"
     members.write_text("name,email,role\nLib Rarian,lib@s.example,librarian\nMem Ber,mem@s.example,committee\n")
     monkeypatch.setattr(settings, "members_file", str(members))
     monkeypatch.setattr(settings, "auth_mode", "dev")
-    db = str(tmp_path / "desk.db")
+    db = db_target
 
     def no_ai(conn):
         raise AssertionError("the AI must not be used when it is switched off")

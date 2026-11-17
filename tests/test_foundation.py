@@ -36,15 +36,15 @@ def test_totals_and_import(conn):
     assert register.totals(conn)["current_books"] == 4
 
 
-def test_db_created_from_scratch(tmp_path):
-    c = connect(str(tmp_path / "fresh.db"))
+def test_db_created_from_scratch(db_target):
+    c = connect(db_target)
     init_db(c)
     init_db(c)  # idempotent
     assert register.totals(c)["total_books"] == 0
 
 
 def test_students_table_has_no_password_column(conn):
-    cols = {r["name"] for r in conn.execute("PRAGMA table_info(students)")}
+    cols = {d[0] for d in conn.execute("SELECT * FROM students LIMIT 0").description}
     assert cols == {"student_id", "name", "grade", "contact_email", "deleted_at", "deleted_by", "delete_reason"}
 
 
@@ -206,9 +206,8 @@ def test_agent_resumes_after_approval(conn):
 
 # ---------------------------------------------------------------- Phase 7
 
-def test_backup_and_restore(tmp_path, conn):
-    db_file = conn.execute("PRAGMA database_list").fetchone()["file"]
-    path = backup.backup(db_file, str(tmp_path / "bk"))
+def test_backup_and_restore(tmp_path, conn, db_target):
+    path = backup.backup(db_target, str(tmp_path / "bk"))
     target = tmp_path / "restored.db"
     backup.restore(str(path), str(target))
     c = connect(str(target))
