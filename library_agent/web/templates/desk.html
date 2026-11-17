@@ -1,83 +1,169 @@
 {% extends "base.html" %}
 {% block title %}Desk{% endblock %}
-{% block content %}
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;600;700&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
-  .desk { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1rem; }
-  .desk .card { margin:0; }
-  .desk h2 { font-size:1.05rem; margin:0 0 .6rem; }
-  .desk label { display:block; font-size:.85rem; color:var(--muted); margin:.4rem 0 .15rem; }
-  .desk input, .desk select, .desk textarea { width:100%; }
-  .desk button { margin-top:.7rem; }
+/* Hallmark · shape: app screen · genre: editorial · theme: Ink, school navy (deal 2/3, seed school-library-front-desk-19ea·a2a01f0b·2026-11-17·r0) · redesign: full
+ * nav: kept (base.html) · signature: the counter, look up on the left and act on the right without leaving the page · states: results, no match, not searched, message · ink: paper
+ * axes: light/grotesk-sans/chromatic-teal · posture: restrained · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R4 V4 · weakest: E, five forms collapsed to one tab set so the screen shows one task at a time */
+body:has(.dk) {
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-3xl: 2.074rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --dur-micro: 120ms;
+  --color-paper: oklch(99.5% 0.003 100); --color-paper-2: oklch(97.5% 0.008 255); --color-paper-3: oklch(94.5% 0.014 255);
+  --color-ink: var(--brand-navy); --color-ink-2: oklch(32% 0.035 255); --color-muted: oklch(46% 0.025 255);
+  --color-rule: oklch(88% 0.015 255);
+  --color-accent: oklch(50% 0.095 188); --color-accent-soft: oklch(93% 0.05 190); --color-accent-soft-ink: oklch(27% 0.045 190);
+  --color-focus: oklch(50% 0.095 188);
+  --font-body: "Epilogue", ui-sans-serif, system-ui, sans-serif; --font-outlier: "IBM Plex Mono", ui-monospace, monospace;
+  --radius-card: 12px; --radius-pill: 999px; --radius-control: 10px; --rule-hair: 1px; --control-h: 40px;
+  --tracking-display: -0.04em;
+  background: var(--bg);
+}
+.dk { font-family: var(--font-body); color: var(--color-ink); }
+main:has(.dk) { max-width: 1180px; }
+.dk :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
+.dk .head { display: flex; align-items: baseline; gap: var(--space-md); flex-wrap: wrap; margin: var(--space-md) 0 var(--space-xl); }
+.dk h1 { margin: 0; font-size: var(--text-3xl); font-weight: 700; letter-spacing: var(--tracking-display); line-height: 1.05; }
+.dk h2 { margin: 0; font-weight: 700; letter-spacing: -0.02em; }
+.dk .pending { font-size: var(--text-sm); display: inline-flex; gap: var(--space-xs); align-items: center; color: var(--color-ink); font-weight: 600; }
+.dk .pending:hover { text-decoration-color: var(--color-accent); }
+.dk .desk { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--space-xl); align-items: start; }
+
+.dk label { display: block; font-size: var(--text-sm); color: var(--color-muted); margin-bottom: var(--space-2xs); }
+.dk input, .dk select, .dk textarea { width: 100%; min-height: var(--control-h); padding: var(--space-xs) var(--space-sm); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-control); background: var(--color-paper); color: var(--color-ink); font: inherit; transition: border-color var(--dur-micro) var(--ease-out); }
+.dk input::placeholder, .dk textarea::placeholder { color: var(--color-muted); }
+.dk input:hover, .dk select:hover, .dk textarea:hover { border-color: var(--color-muted); }
+.dk input:focus-visible, .dk select:focus-visible, .dk textarea:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 0; border-color: var(--color-ink); }
+.dk textarea { resize: vertical; }
+
+.dk .btn { display: inline-flex; align-items: center; justify-content: center; min-height: var(--control-h); padding: var(--space-xs) var(--space-md); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-control); background: var(--color-paper-2); color: var(--color-ink); font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out), transform var(--dur-micro) var(--ease-out); }
+.dk .btn:hover { background: var(--color-paper-3); }
+.dk .btn:active { transform: translateY(1px); }
+.dk .btn:disabled { opacity: .5; cursor: not-allowed; }
+.dk .btn--primary { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-paper); }
+.dk .btn--primary:hover { background: var(--color-ink-2); }
+
+.dk .find { display: flex; gap: var(--space-xs); }
+.dk .find input { min-height: 48px; font-size: var(--text-lg); }
+.dk .find .btn { min-height: 48px; }
+.dk .results h2 { font-size: var(--text-md); margin: var(--space-xl) 0 var(--space-xs); }
+.dk .list { list-style: none; margin: 0; padding: 0; border-top: var(--rule-hair) solid var(--color-ink); }
+.dk .list li { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; gap: var(--space-md); align-items: center; padding: var(--space-sm) 0; border-bottom: var(--rule-hair) solid var(--color-rule); }
+.dk .code { font-family: var(--font-outlier); font-size: var(--text-sm); color: var(--color-muted); }
+.dk .name { font-weight: 600; }
+.dk .sub { font-size: var(--text-sm); color: var(--color-muted); }
+.dk .tag { display: inline-flex; padding: var(--space-3xs) var(--space-sm); border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 600; background: var(--color-paper-3); color: var(--color-ink-2); white-space: nowrap; }
+.dk .tag--in { background: var(--color-accent-soft); color: var(--color-accent-soft-ink); }
+.dk .tag--out { background: transparent; box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule); color: var(--color-muted); }
+.dk .tag--on { background: var(--color-ink); color: var(--color-paper); }
+.dk .empty { color: var(--color-muted); padding: var(--space-md) 0; border-top: var(--rule-hair) solid var(--color-ink); margin: 0; }
+
+.dk .well { background: var(--color-paper); border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-card); padding: var(--space-lg); position: sticky; top: var(--space-lg); }
+.dk .well h2 { font-size: var(--text-xl); margin-bottom: var(--space-md); }
+.dk .tabs { display: flex; flex-wrap: wrap; gap: var(--space-2xs); padding: var(--space-2xs); background: var(--color-paper-3); border-radius: var(--radius-control); margin-bottom: var(--space-lg); }
+.dk .tabs label { margin: 0; flex: 1 1 auto; text-align: center; padding: var(--space-xs) var(--space-sm); border-radius: 8px; font-size: var(--text-sm); font-weight: 600; color: var(--color-ink-2); cursor: pointer; transition: background-color var(--dur-micro) var(--ease-out); }
+.dk .tabs label:hover { background: var(--color-paper-2); }
+.dk .panel { display: none; }
+.dk .panel form { display: grid; gap: var(--space-md); }
+.dk .panel .hint { font-size: var(--text-sm); color: var(--color-muted); margin: 0; }
+.dk .panel .btn { justify-self: start; }
+#t-borrow:checked ~ .tabs [for=t-borrow], #t-return:checked ~ .tabs [for=t-return], #t-renew:checked ~ .tabs [for=t-renew], #t-reserve:checked ~ .tabs [for=t-reserve], #t-refer:checked ~ .tabs [for=t-refer] { background: var(--color-paper); color: var(--color-ink); box-shadow: 0 0 0 var(--rule-hair) var(--color-rule); }
+#t-borrow:focus-visible ~ .tabs [for=t-borrow], #t-return:focus-visible ~ .tabs [for=t-return], #t-renew:focus-visible ~ .tabs [for=t-renew], #t-reserve:focus-visible ~ .tabs [for=t-reserve], #t-refer:focus-visible ~ .tabs [for=t-refer] { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+#t-borrow:checked ~ .p-borrow, #t-return:checked ~ .p-return, #t-renew:checked ~ .p-renew, #t-reserve:checked ~ .p-reserve, #t-refer:checked ~ .p-refer { display: block; }
+.dk .note { margin: var(--space-lg) 0 0; font-size: var(--text-sm); color: var(--color-muted); }
+.dk .note a { color: var(--color-ink); font-weight: 600; }
+.dk .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (max-width: 60rem) { .dk .desk { grid-template-columns: minmax(0, 1fr); } .dk .well { position: static; } }
+@media (prefers-reduced-motion: reduce) { .dk * { transition-duration: 0.01ms !important; } }
 </style>
-<h1>Library desk</h1>
-{% if pending %}<div class="msg"><a href="/approvals">{{ pending }} entry(s) waiting for approval</a></div>{% endif %}
+{% endblock %}
+{% block content %}
+<div class="dk">
+  <div class="head">
+    <h1>Library desk</h1>
+    {% if pending %}<a class="pending" href="/approvals"><span class="tag tag--on">{{ pending }}</span>waiting for approval</a>{% endif %}
+  </div>
 
-<div class="card">
-  <form method="get" action="/desk" class="row">
-    <input name="q" value="{{ q }}" style="flex:1" placeholder="Look up a book name, author, book ID, student name or student ID">
-    <button class="secondary">Look up</button>
-  </form>
-  {% if books is not none %}
-  <h2 style="font-size:1rem;margin:1rem 0 .4rem">Books</h2>
-  {% if books %}
-  <table>
-    <tr><th>Book ID</th><th>Name</th><th>Author</th><th>Status</th></tr>
-    {% for b in books %}
-    <tr><td>{{ b.book_id }}</td><td>{{ b.name }}{% if b.copy_number %} <span class="muted">copy {{ b.copy_number }}</span>{% endif %}</td>
-        <td>{{ b.author }}</td><td class="status-{{ b.status }}">{{ b.status }}</td></tr>
-    {% endfor %}
-  </table>
-  {% else %}<p class="muted">No books match.</p>{% endif %}
-  <h2 style="font-size:1rem;margin:1rem 0 .4rem">Students</h2>
-  {% if students %}
-  <table>
-    <tr><th>Student ID</th><th>Name</th><th>Grade</th></tr>
-    {% for s in students %}<tr><td>{{ s.student_id }}</td><td>{{ s.name }}</td><td>{{ s.grade }}</td></tr>{% endfor %}
-  </table>
-  {% else %}<p class="muted">No students match.</p>{% endif %}
-  {% endif %}
-</div>
+  <div class="desk">
+    <section class="results" aria-label="Look up">
+      <form method="get" action="/desk" class="find" role="search">
+        <label for="q" class="visually-hidden">Look up</label>
+        <input id="q" name="q" value="{{ q }}" placeholder="Book name, author, book ID, student name or ID">
+        <button class="btn">Look up</button>
+      </form>
 
-<p class="muted">Borrowings, returns and renewals wait in <a href="/approvals">Approvals</a> until a
-committee member approves them. Reservations are saved straight away.</p>
+      {% if books is not none %}
+      <h2>Books</h2>
+      {% if books %}
+      <ul class="list">
+        {% for b in books %}
+        {% set tone = 'in' if b.status == 'Available' else ('on' if b.status in ['Overdue', 'Lost', 'Damaged'] else 'out') %}
+        <li><span class="code">{{ b.book_id }}</span>
+            <span><span class="name">{{ b.name }}</span> <span class="sub">{% if b.copy_number %}copy {{ b.copy_number }}, {% endif %}{{ b.author }}</span></span>
+            <span class="tag tag--{{ tone }} status-{{ b.status }}">{{ b.status }}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="empty">No books match.</p>{% endif %}
 
-<div class="desk">
-  <form method="post" action="/desk/borrow" class="card">
-    <h2>Borrow</h2>
-    <label for="b-book">Book ID</label><input id="b-book" name="book_id" required placeholder="B-101">
-    <label for="b-student">Student ID or name</label><input id="b-student" name="student" required placeholder="S-001">
-    <button>Send for approval</button>
-  </form>
+      <h2>Students</h2>
+      {% if students %}
+      <ul class="list">
+        {% for s in students %}<li><span class="code">{{ s.student_id }}</span><span class="name">{{ s.name }}</span><span class="sub">Grade {{ s.grade }}</span></li>{% endfor %}
+      </ul>
+      {% else %}<p class="empty">No students match.</p>{% endif %}
+      {% endif %}
+    </section>
 
-  <form method="post" action="/desk/return" class="card">
-    <h2>Return</h2>
-    <label for="r-book">Book ID</label><input id="r-book" name="book_id" required>
-    <label for="r-cond">Condition</label>
-    <select id="r-cond" name="condition"><option value="good">Good</option><option value="damaged">Damaged</option></select>
-    <label for="r-notes">Notes (describe any damage)</label><textarea id="r-notes" name="notes" rows="2"></textarea>
-    <button>Send for approval</button>
-  </form>
+    <section class="well" aria-labelledby="act">
+      <h2 id="act">Record an entry</h2>
+      <input type="radio" name="task" id="t-borrow" class="visually-hidden" checked>
+      <input type="radio" name="task" id="t-return" class="visually-hidden">
+      <input type="radio" name="task" id="t-renew" class="visually-hidden">
+      <input type="radio" name="task" id="t-reserve" class="visually-hidden">
+      <input type="radio" name="task" id="t-refer" class="visually-hidden">
+      <div class="tabs">
+        <label for="t-borrow">Borrow</label><label for="t-return">Return</label><label for="t-renew">Renew</label><label for="t-reserve">Reserve</label><label for="t-refer">Refer</label>
+      </div>
 
-  <form method="post" action="/desk/renew" class="card">
-    <h2>Renew</h2>
-    <label for="n-book">Book ID</label><input id="n-book" name="book_id" required>
-    <button>Send for approval</button>
-  </form>
+      <div class="panel p-borrow"><form method="post" action="/desk/borrow">
+        <div><label for="b-book">Book ID</label><input id="b-book" name="book_id" required placeholder="B-101"></div>
+        <div><label for="b-student">Student ID or name</label><input id="b-student" name="student" required placeholder="S-001"></div>
+        <button class="btn btn--primary">Send for approval</button>
+      </form></div>
 
-  <form method="post" action="/desk/reserve" class="card">
-    <h2>Reserve</h2>
-    <label for="v-book">Book ID</label><input id="v-book" name="book_id" required>
-    <label for="v-student">Student ID or name</label><input id="v-student" name="student" required>
-    <button>Reserve</button>
-  </form>
+      <div class="panel p-return"><form method="post" action="/desk/return">
+        <div><label for="r-book">Book ID</label><input id="r-book" name="book_id" required></div>
+        <div><label for="r-cond">Condition</label><select id="r-cond" name="condition"><option value="good">Good</option><option value="damaged">Damaged</option></select></div>
+        <div><label for="r-notes">Notes (describe any damage)</label><textarea id="r-notes" name="notes" rows="2"></textarea></div>
+        <button class="btn btn--primary">Send for approval</button>
+      </form></div>
 
-  <form method="post" action="/desk/refer" class="card">
-    <h2>Refer to the librarian</h2>
-    <p class="muted" style="margin:0">Fines, due-date changes, lost books, corrections, or anything unsure.</p>
-    <label for="f-notes">What happened</label><textarea id="f-notes" name="notes" rows="2" required></textarea>
-    <label for="f-book">Book ID (optional)</label><input id="f-book" name="book_id">
-    <label for="f-student">Student ID (optional)</label><input id="f-student" name="student">
-    <button>Send to librarian</button>
-  </form>
+      <div class="panel p-renew"><form method="post" action="/desk/renew">
+        <div><label for="n-book">Book ID</label><input id="n-book" name="book_id" required></div>
+        <button class="btn btn--primary">Send for approval</button>
+      </form></div>
+
+      <div class="panel p-reserve"><form method="post" action="/desk/reserve">
+        <div><label for="v-book">Book ID</label><input id="v-book" name="book_id" required></div>
+        <div><label for="v-student">Student ID or name</label><input id="v-student" name="student" required></div>
+        <button class="btn btn--primary">Reserve</button>
+      </form></div>
+
+      <div class="panel p-refer"><form method="post" action="/desk/refer">
+        <p class="hint">Fines, due-date changes, lost books, corrections, or anything unsure.</p>
+        <div><label for="f-notes">What happened</label><textarea id="f-notes" name="notes" rows="3" required></textarea></div>
+        <div><label for="f-book">Book ID (optional)</label><input id="f-book" name="book_id"></div>
+        <div><label for="f-student">Student ID (optional)</label><input id="f-student" name="student"></div>
+        <button class="btn btn--primary">Send to librarian</button>
+      </form></div>
+
+      <p class="note">Borrowings, returns and renewals wait in <a href="/approvals">Approvals</a> until a committee member approves them. Reservations are saved straight away.</p>
+    </section>
+  </div>
 </div>
 {% endblock %}

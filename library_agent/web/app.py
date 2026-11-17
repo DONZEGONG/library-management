@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -44,6 +45,8 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
                ai_enabled: bool | None = None) -> FastAPI:
     app = FastAPI(title="Library Management Agent")
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret)
+    # The school logo and other images.
+    app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
     db_path = db_path or settings.db_path
     if ai_enabled is None:
         ai_enabled = settings.ai_provider == "anthropic"
