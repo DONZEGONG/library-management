@@ -43,7 +43,7 @@ CSV columns:
 
 - `books.csv`: `book_id,name,author,copy_number,condition_notes`
 - `students.csv`: `student_id,name,grade,contact_email`
-- `members.csv`: `name,email,role` (role is `committee` or `librarian`)
+- `members.csv`: `name,email,role` (role is `committee` or `librarian`). Several people may share one email; after the sign-in code they choose their name
 
 ## Daily job and backup
 

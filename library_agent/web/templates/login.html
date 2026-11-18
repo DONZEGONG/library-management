@@ -6,7 +6,13 @@
   {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
 
   {% if mode == "code" %}
-    {% if not can_send %}
+    {% if choose %}
+    <p>The code is right. This email is shared, so please choose who is signing in.
+      Your name is recorded on everything you approve or change.</p>
+    <form method="post" action="/login/choose" class="row">
+      {% for m in choose %}<button name="name" value="{{ m.name }}">{{ m.name }} ({{ m.role }})</button>{% endfor %}
+    </form>
+    {% elif not can_send %}
     <p>Sign-in emails are not set up on this computer yet. Ask the librarian.</p>
     {% elif sent %}
     <p>We emailed a 6-digit code to <b>{{ email }}</b>. It works once, for 10 minutes.
@@ -38,8 +44,8 @@
   so members sign in with a code sent to their school email. This app never stores passwords.</p>
   {% if members %}
   <form method="post" action="/login" class="row">
-    <select name="email">
-      {% for m in members %}<option value="{{ m.email }}">{{ m.name }} ({{ m.role }})</option>{% endfor %}
+    <select name="member">
+      {% for m in members %}<option value="{{ loop.index0 }}">{{ m.name }} ({{ m.role }})</option>{% endfor %}
     </select>
     <button>Sign in</button>
   </form>
