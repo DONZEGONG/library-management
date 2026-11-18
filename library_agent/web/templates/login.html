@@ -3,8 +3,39 @@
 {% block content %}
 <h1>Sign in</h1>
 <div class="card">
-  <p class="muted">Local testing mode: choose your name. For real use, set <code>AUTH_MODE=header</code>
-  so sign-in goes through the school's accounts. This app never stores passwords.</p>
+  {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+
+  {% if mode == "code" %}
+    {% if not can_send %}
+    <p>Sign-in emails are not set up on this computer yet. Ask the librarian.</p>
+    {% elif sent %}
+    <p>We emailed a 6-digit code to <b>{{ email }}</b>. It works once, for 10 minutes.
+      If it isn't in your inbox, check your spam folder.</p>
+    <form method="post" action="/login/verify" class="row">
+      <input type="hidden" name="email" value="{{ email }}">
+      <label for="code" class="visually-hidden">Code</label>
+      <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
+             placeholder="6-digit code" required autofocus>
+      <button>Sign in</button>
+    </form>
+    <form method="post" action="/login/code">
+      <input type="hidden" name="email" value="{{ email }}">
+      <p class="muted">No code? <button class="link">Send a new one</button> or
+        <a href="/login">use a different email</a>.</p>
+    </form>
+    {% else %}
+    <p>Type your school email. We'll email you a code to sign in. This app never stores passwords.</p>
+    <form method="post" action="/login/code" class="row">
+      <label for="email" class="visually-hidden">School email</label>
+      <input id="email" name="email" type="email" autocomplete="email" value="{{ email or '' }}"
+             placeholder="you@school" required autofocus>
+      <button>Email me a code</button>
+    </form>
+    {% endif %}
+
+  {% else %}
+  <p class="muted">Local testing mode: choose your name. For real use, set <code>AUTH_MODE=code</code>
+  so members sign in with a code sent to their school email. This app never stores passwords.</p>
   {% if members %}
   <form method="post" action="/login" class="row">
     <select name="email">
@@ -14,6 +45,7 @@
   </form>
   {% else %}
   <p>No committee members yet. Copy <code>members.example.csv</code> to <code>members.csv</code> and add names.</p>
+  {% endif %}
   {% endif %}
 </div>
 {% endblock %}
