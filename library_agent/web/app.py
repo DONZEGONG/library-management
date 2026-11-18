@@ -30,16 +30,32 @@ def _redirect(path: str, message) -> RedirectResponse:
     return RedirectResponse(f"{path}?msg={quote(str(message))}", 303)
 
 
-def load_members(path: str) -> dict[str, dict]:
+def member_list(path: str) -> list[dict]:
     """members.csv: name,email,role (role is committee or librarian).
-    The app keeps no passwords; sign-in is done by the school's accounts."""
+    The app keeps no passwords; sign-in is done by the school's accounts.
+    Several members may share one email; they choose their name after signing in."""
     p = Path(path)
     if not p.exists():
-        return {}
+        return []
     with p.open(newline="", encoding="utf-8-sig") as f:
-        return {r["email"].strip().lower(): {"name": r["name"].strip(), "email": r["email"].strip().lower(),
-                                             "role": (r.get("role") or "committee").strip()}
-                for r in csv.DictReader(f) if r.get("email")}
+        return [{"name": r["name"].strip(), "email": r["email"].strip().lower(),
+                 "role": (r.get("role") or "committee").strip()}
+                for r in csv.DictReader(f) if r.get("email") and (r.get("name") or "").strip()]
+
+
+def load_members(path: str) -> dict[str, dict]:
+    """The first member listed for each email."""
+    members: dict[str, dict] = {}
+    for m in member_list(path):
+        members.setdefault(m["email"], m)
+    return members
+
+
+def members_for(path: str, email: str) -> list[dict]:
+    return [m for m in member_list(path) if m["email"] == email.strip().lower()]
+
+
+CHOOSE_WITHIN = 10 * 60  # seconds to pick a name after a shared email's code
 
 
 class LoginCodes:
@@ -142,7 +158,7 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
     def login_page(request, **ctx):
         return TEMPLATES.TemplateResponse(request, "login.html", {
             "user": None, "mode": settings.auth_mode, "can_send": mailer.configured,
-            "members": load_members(settings.members_file).values(), **ctx})
+            "members": member_list(settings.members_file), **ctx})
 
     @app.get("/login", response_class=HTMLResponse)
     def login_form(request: Request):
@@ -155,7 +171,8 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
         if settings.auth_mode != "code":
             raise HTTPException(404)
         email = email.strip().lower()
-        member = load_members(settings.members_file).get(email)
+        matches = members_for(settings.members_file, email)
+        member = matches[0] if matches else None
         if not mailer.configured:
             return login_page(request, error="Sign-in emails are not set up on this computer yet. "
                                              "Ask the librarian.")
@@ -168,7 +185,7 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
                               error="A code was sent less than a minute ago. Check your inbox.")
         try:
             mailer.send(email, "Library app sign-in code",
-                        f"Hello {member['name']},\n\nYour sign-in code for the library app is {code}.\n"
+                        f"Hello {' / '.join(m['name'] for m in matches)},\n\nYour sign-in code for the library app is {code}.\n"
                         f"It works once, for {LoginCodes.LIFETIME // 60} minutes.\n\n"
                         "If you did not ask for it, you can ignore this email.\n\nSchool Library")
         except (OSError, smtplib.SMTPException):
@@ -182,19 +199,39 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
         if settings.auth_mode != "code":
             raise HTTPException(404)
         email = email.strip().lower()
-        member = load_members(settings.members_file).get(email)
-        if member is None or not codes.check(email, code):
+        matches = members_for(settings.members_file, email)
+        if not matches or not codes.check(email, code):
             return login_page(request, email=email, sent=True,
                               error="That code is wrong or has expired. Check it, or ask for a new one.")
+        if len(matches) == 1:
+            request.session["user"] = matches[0]
+            return RedirectResponse("/", 303)
+        # A shared email: the code proves the inbox, then the person says who they are.
+        request.session["choose"] = {"email": email, "until": time.time() + CHOOSE_WITHIN}
+        return login_page(request, choose=matches)
+
+    @app.post("/login/choose")
+    def login_choose(request: Request, name: str = Form("")):
+        pending = request.session.pop("choose", None)
+        if settings.auth_mode != "code" or not pending or time.time() > pending["until"]:
+            return RedirectResponse("/login", 303)
+        member = next((m for m in members_for(settings.members_file, pending["email"])
+                       if m["name"] == name), None)
+        if member is None:
+            return RedirectResponse("/login", 303)
         request.session["user"] = member
         return RedirectResponse("/", 303)
 
     @app.post("/login")
-    def login(request: Request, email: str = Form(...)):
+    def login(request: Request, email: str = Form(""), member: str = Form("")):
         # Picking a name is for local testing only.
         if settings.auth_mode != "dev":
             raise HTTPException(404)
-        member = load_members(settings.members_file).get(email.strip().lower())
+        everyone = member_list(settings.members_file)
+        if member.isdigit() and int(member) < len(everyone):
+            member = everyone[int(member)]
+        else:
+            member = load_members(settings.members_file).get(email.strip().lower())
         if member is None:
             raise HTTPException(403, "Not on the committee list.")
         request.session["user"] = member
