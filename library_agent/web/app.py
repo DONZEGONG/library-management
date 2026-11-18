@@ -39,6 +39,7 @@ def load_members(path: str) -> dict[str, dict]:
 
 DESK_TOOLS = {"borrow": "save_borrowing_details", "return": "update_return_status",
               "renew": "renew_loan", "reserve": "reserve_book", "refer": "escalate_to_librarian"}
+DESK_BOOK_LIMIT = 100  # enough to list the largest category (Stories) in full
 
 
 def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | None = None,
@@ -111,13 +112,19 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
     # ------------------------------------------------------------ desk (no AI needed)
 
     @app.get("/desk", response_class=HTMLResponse)
-    def desk_page(request: Request, q: str = "", user=Depends(current_user), conn=Depends(get_conn)):
+    def desk_page(request: Request, q: str = "", category: str = "",
+                  user=Depends(current_user), conn=Depends(get_conn)):
         books = students = None
+        if q.strip() or category:
+            books = register.find_books(conn, q, limit=DESK_BOOK_LIMIT + 1, category=category)
         if q.strip():
-            books = register.find_books(conn, q)
             students = [{"student_id": s["student_id"], "name": s["name"], "grade": s["grade"]}
                         for s in register.find_students(conn, q)]
-        return page(request, "desk.html", user, q=q, books=books, students=students,
+        more = books is not None and len(books) > DESK_BOOK_LIMIT
+        return page(request, "desk.html", user, q=q, category=category,
+                    categories=register.categories(conn),
+                    books=books[:DESK_BOOK_LIMIT] if more else books, more_books=more,
+                    students=students,
                     pending=len(approvals.list_pending(conn)), message=request.query_params.get("msg"))
 
     @app.post("/desk/{task}")

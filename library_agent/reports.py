@@ -11,13 +11,13 @@ import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-SHELF_CHECK_COLUMNS = ["book_id", "name", "copy_number", "status", "with_student",
+SHELF_CHECK_COLUMNS = ["book_id", "name", "category", "copy_number", "status", "with_student",
                        "due_date", "on_shelf_yes_no", "notes"]
 
 
 def shelf_check_rows(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT b.book_id, b.name, b.copy_number, b.status, s.name AS student_name,"
+        "SELECT b.book_id, b.name, b.category, b.copy_number, b.status, s.name AS student_name,"
         " s.grade, l.due_date FROM books b"
         " LEFT JOIN loans l ON l.book_id = b.book_id AND l.return_date IS NULL"
         " AND l.deleted_at IS NULL"
@@ -28,6 +28,7 @@ def shelf_check_rows(conn: sqlite3.Connection) -> list[dict]:
         {
             "book_id": r["book_id"],
             "name": r["name"],
+            "category": r["category"],
             "copy_number": r["copy_number"],
             "status": r["status"],
             "with_student": f"{r['student_name']} (grade {r['grade']})" if r["student_name"] else "",

@@ -32,15 +32,28 @@ def get_student(conn, student_id: str):
     ).fetchone()
 
 
-def find_books(conn, query: str, limit: int = 20) -> list[dict]:
-    like = f"%{query.strip()}%"
-    rows = conn.execute(
-        "SELECT book_id, name, author, copy_number, status FROM books"
-        " WHERE deleted_at IS NULL AND (book_id = ? OR name LIKE ? OR author LIKE ?)"
-        " ORDER BY name, copy_number LIMIT ?",
-        (query.strip(), like, like, limit),
-    ).fetchall()
+def find_books(conn, query: str, limit: int = 20, category: str = "") -> list[dict]:
+    """Match the book ID, name, author or category. A non-empty `category`
+    limits the results to that category; an empty query then lists all of it."""
+    q = query.strip()
+    like = f"%{q}%"
+    sql = ("SELECT book_id, name, author, category, copy_number, status FROM books"
+           " WHERE deleted_at IS NULL")
+    params: list = []
+    if q:
+        sql += " AND (book_id = ? OR name LIKE ? OR author LIKE ? OR category LIKE ?)"
+        params += [q, like, like, like]
+    if category:
+        sql += " AND category = ?"
+        params.append(category)
+    rows = conn.execute(sql + " ORDER BY name, copy_number LIMIT ?", (*params, limit)).fetchall()
     return [dict(r) for r in rows]
+
+
+def categories(conn) -> list[str]:
+    return [r[0] for r in conn.execute(
+        "SELECT DISTINCT category FROM books WHERE deleted_at IS NULL AND category <> ''"
+        " ORDER BY category")]
 
 
 def find_students(conn, query: str, limit: int = 10) -> list:

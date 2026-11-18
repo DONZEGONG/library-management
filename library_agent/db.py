@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS books (
     book_id         TEXT PRIMARY KEY,
     name            TEXT NOT NULL,
     author          TEXT NOT NULL DEFAULT '',
+    category        TEXT NOT NULL DEFAULT '',
     copy_number     INTEGER NOT NULL DEFAULT 1,
     status          TEXT NOT NULL DEFAULT 'Available',
     condition_notes TEXT NOT NULL DEFAULT '',
@@ -148,4 +149,20 @@ def connect(path: str | None = None) -> sqlite3.Connection:
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    _add_missing_columns(conn)
     conn.commit()
+
+
+# Columns added after the first release. CREATE TABLE IF NOT EXISTS leaves an
+# existing table alone, so older databases get these added here.
+NEW_COLUMNS = {
+    "books": {"category": "TEXT NOT NULL DEFAULT ''"},
+}
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    for table, columns in NEW_COLUMNS.items():
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for name, ddl in columns.items():
+            if name not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
