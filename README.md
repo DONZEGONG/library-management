@@ -89,7 +89,7 @@ review. Use it for the trial week (PLAN 6.2, 6.3) and the monthly correction-log
 | `SCHOOL_EMAIL` | `office@school.example` | School mail ID |
 | `COMMITTEE_EMAIL` | `library-committee@school.example` | Where red alerts go |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | | School email server. With no `SMTP_HOST`, messages are only recorded in the database. |
-| `AUTH_MODE` | `dev` | `dev` = pick your name (local testing only). `header` = a school sign-in proxy passes the signed-in email in `AUTH_HEADER`. |
+| `AUTH_MODE` | `dev` | `dev` = pick your name (local testing only). `code` = members type their school email and get a one-time 6-digit code by email (needs the `SMTP_*` settings; for Gmail use `smtp.gmail.com`, port 587 and an app password). `header` = a school sign-in proxy passes the signed-in email in `AUTH_HEADER`. |
 | `SESSION_SECRET` | `change-me` | Set a long random value in real use |
 | `AI_PROVIDER` | `none` | `none` = Desk only, no AI. `anthropic` = also turn on the AI chat. |
 | `LIBRARY_AGENT_MODEL` | `claude-opus-5-5` | Claude model (only when the AI chat is on) |

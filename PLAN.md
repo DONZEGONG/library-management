@@ -133,7 +133,7 @@ Every tool records who used it and when. Write tools never change records direct
 - [x] **5.5 Librarian tools page:** set fines, mark lost, delete, change due dates, correct states. Each one asks for a reason.
 - [x] **5.6 Correction log page:** a read-only list of all corrections
 - [ ] **5.7 Committee login:** each committee member signs in so approvals record a real name. The library app does not store passwords itself. Use the school's existing accounts or a simple shared sign-in service.
-  - *Built:* `AUTH_MODE=header` takes the signed-in email from a school sign-in proxy and checks it against `members.csv`. `AUTH_MODE=dev` (pick a name) is for local testing only. Still to do: connect the school's sign-in service.
+  - *Built:* `AUTH_MODE=header` takes the signed-in email from a school sign-in proxy and checks it against `members.csv`. `AUTH_MODE=dev` (pick a name) is for local testing only. `AUTH_MODE=code` (added 2026-11-18) emails a one-time code to a school address on `members.csv` instead, with no proxy needed; the school chose this route. Still to do: set up the sending Gmail account and the real members list on the school machine.
 
 - [x] **5.8 Desk page (no AI needed):** forms for borrow, return (good or damaged), renew, reserve and refer to the librarian, plus a book and student look-up. Each form calls the same tools as the agent, so every check, the audit log and Approvals stay the same; approvals show "Desk entry by <name>". The AI chat is optional (`AI_PROVIDER=anthropic`); by default it is off and the home page opens the Desk. Decided 2026-11-10 to avoid API costs; the facilitator agreed.
 

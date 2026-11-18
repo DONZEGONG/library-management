@@ -1,6 +1,6 @@
 # Library committee guide
 
-**Sign in** with your school account. You will see Desk, Approvals, Register and Correction log
+**Sign in** by typing your school email. The app emails you a 6-digit code; type it in. Each code works once, for 10 minutes. You will see Desk, Approvals, Register and Correction log
 (and Chat, if the AI chat has been switched on).
 
 ## Find a book or student

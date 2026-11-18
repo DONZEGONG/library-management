@@ -1,6 +1,11 @@
 ﻿"""Web interface (PLAN Phase 5)."""
 import csv
+import hashlib
+import hmac
 import json
+import secrets
+import smtplib
+import time
 from datetime import date
 from pathlib import Path
 from urllib.parse import quote
@@ -35,6 +40,49 @@ def load_members(path: str) -> dict[str, dict]:
         return {r["email"].strip().lower(): {"name": r["name"].strip(), "email": r["email"].strip().lower(),
                                              "role": (r.get("role") or "committee").strip()}
                 for r in csv.DictReader(f) if r.get("email")}
+
+
+class LoginCodes:
+    """One-time sign-in codes, kept in memory only (a restart cancels them).
+    Only a hash of each code is held."""
+    LIFETIME = 10 * 60    # seconds a code stays valid
+    RESEND_AFTER = 60     # seconds before another code can be sent
+    MAX_TRIES = 5         # wrong guesses before the code is cancelled
+
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self._codes: dict[str, dict] = {}
+
+    @staticmethod
+    def _hash(code: str) -> str:
+        return hashlib.sha256(code.encode()).hexdigest()
+
+    def issue(self, email: str) -> str | None:
+        now = self.clock()
+        old = self._codes.get(email)
+        if old and now - old["issued"] < self.RESEND_AFTER:
+            return None
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        self._codes[email] = {"hash": self._hash(code), "issued": now, "tries": 0}
+        return code
+
+    def check(self, email: str, code: str) -> bool:
+        entry = self._codes.get(email)
+        if entry is None:
+            return False
+        if self.clock() - entry["issued"] > self.LIFETIME:
+            self.discard(email)
+            return False
+        entry["tries"] += 1
+        if hmac.compare_digest(entry["hash"], self._hash(code.strip().replace(" ", ""))):
+            self.discard(email)
+            return True
+        if entry["tries"] >= self.MAX_TRIES:
+            self.discard(email)
+        return False
+
+    def discard(self, email: str) -> None:
+        self._codes.pop(email, None)
 
 
 DESK_TOOLS = {"borrow": "save_borrowing_details", "return": "update_return_status",
@@ -87,17 +135,65 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
     def page(request, name, user, **ctx):
         return TEMPLATES.TemplateResponse(request, name, {"user": user, **ctx})
 
-    # ------------------------------------------------------------ sign in (dev mode)
+    # ------------------------------------------------------------ sign in
+
+    codes = LoginCodes()
+
+    def login_page(request, **ctx):
+        return TEMPLATES.TemplateResponse(request, "login.html", {
+            "user": None, "mode": settings.auth_mode, "can_send": mailer.configured,
+            "members": load_members(settings.members_file).values(), **ctx})
 
     @app.get("/login", response_class=HTMLResponse)
     def login_form(request: Request):
         if settings.auth_mode == "header":
             return RedirectResponse("/", 303)
-        return TEMPLATES.TemplateResponse(request, "login.html",
-                                          {"user": None, "members": load_members(settings.members_file).values()})
+        return login_page(request)
+
+    @app.post("/login/code", response_class=HTMLResponse)
+    def login_send_code(request: Request, email: str = Form("")):
+        if settings.auth_mode != "code":
+            raise HTTPException(404)
+        email = email.strip().lower()
+        member = load_members(settings.members_file).get(email)
+        if not mailer.configured:
+            return login_page(request, error="Sign-in emails are not set up on this computer yet. "
+                                             "Ask the librarian.")
+        if member is None:
+            return login_page(request, email=email,
+                              error="That email is not on the library committee list.")
+        code = codes.issue(email)
+        if code is None:
+            return login_page(request, email=email, sent=True,
+                              error="A code was sent less than a minute ago. Check your inbox.")
+        try:
+            mailer.send(email, "Library app sign-in code",
+                        f"Hello {member['name']},\n\nYour sign-in code for the library app is {code}.\n"
+                        f"It works once, for {LoginCodes.LIFETIME // 60} minutes.\n\n"
+                        "If you did not ask for it, you can ignore this email.\n\nSchool Library")
+        except (OSError, smtplib.SMTPException):
+            codes.discard(email)
+            return login_page(request, email=email,
+                              error="The email could not be sent. Try again, or ask the librarian.")
+        return login_page(request, email=email, sent=True)
+
+    @app.post("/login/verify", response_class=HTMLResponse)
+    def login_verify(request: Request, email: str = Form(""), code: str = Form("")):
+        if settings.auth_mode != "code":
+            raise HTTPException(404)
+        email = email.strip().lower()
+        member = load_members(settings.members_file).get(email)
+        if member is None or not codes.check(email, code):
+            return login_page(request, email=email, sent=True,
+                              error="That code is wrong or has expired. Check it, or ask for a new one.")
+        request.session["user"] = member
+        return RedirectResponse("/", 303)
 
     @app.post("/login")
     def login(request: Request, email: str = Form(...)):
+        # Picking a name is for local testing only.
+        if settings.auth_mode != "dev":
+            raise HTTPException(404)
         member = load_members(settings.members_file).get(email.strip().lower())
         if member is None:
             raise HTTPException(403, "Not on the committee list.")
