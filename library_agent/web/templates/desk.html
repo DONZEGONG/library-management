@@ -50,6 +50,9 @@ main:has(.dk) { max-width: 1180px; }
 .dk .find { display: flex; gap: var(--space-xs); }
 .dk .find input { min-height: 48px; font-size: var(--text-lg); }
 .dk .find .btn { min-height: 48px; }
+.dk .find { flex-wrap: wrap; }
+.dk .find input { flex: 1 1 14rem; }
+.dk .find select { flex: 0 1 13rem; min-height: 48px; width: auto; }
 .dk .results h2 { font-size: var(--text-md); margin: var(--space-xl) 0 var(--space-xs); }
 .dk .list { list-style: none; margin: 0; padding: 0; border-top: var(--rule-hair) solid var(--color-ink); }
 .dk .list li { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; gap: var(--space-md); align-items: center; padding: var(--space-sm) 0; border-bottom: var(--rule-hair) solid var(--color-rule); }
@@ -93,7 +96,14 @@ main:has(.dk) { max-width: 1180px; }
     <section class="results" aria-label="Look up">
       <form method="get" action="/desk" class="find" role="search">
         <label for="q" class="visually-hidden">Look up</label>
-        <input id="q" name="q" value="{{ q }}" placeholder="Book name, author, book ID, student name or ID">
+        <input id="q" name="q" value="{{ q }}" placeholder="Book name, author, category, book ID, student name or ID">
+        {% if categories %}
+        <label for="category" class="visually-hidden">Category</label>
+        <select id="category" name="category">
+          <option value="">All categories</option>
+          {% for c in categories %}<option{% if c == category %} selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select>
+        {% endif %}
         <button class="btn">Look up</button>
       </form>
 
@@ -104,18 +114,21 @@ main:has(.dk) { max-width: 1180px; }
         {% for b in books %}
         {% set tone = 'in' if b.status == 'Available' else ('on' if b.status in ['Overdue', 'Lost', 'Damaged'] else 'out') %}
         <li><span class="code">{{ b.book_id }}</span>
-            <span><span class="name">{{ b.name }}</span> <span class="sub">{% if b.copy_number %}copy {{ b.copy_number }}, {% endif %}{{ b.author }}</span></span>
+            <span><span class="name">{{ b.name }}</span> <span class="sub">{{ [b.category, ('copy ' ~ b.copy_number) if b.copy_number else '', b.author] | select | join(', ') }}</span></span>
             <span class="tag tag--{{ tone }} status-{{ b.status }}">{{ b.status }}</span></li>
         {% endfor %}
       </ul>
+      {% if more_books %}<p class="empty">Showing the first {{ books | length }}. Type more of the name to narrow it down.</p>{% endif %}
       {% else %}<p class="empty">No books match.</p>{% endif %}
 
+      {% if students is not none %}
       <h2>Students</h2>
       {% if students %}
       <ul class="list">
         {% for s in students %}<li><span class="code">{{ s.student_id }}</span><span class="name">{{ s.name }}</span><span class="sub">Grade {{ s.grade }}</span></li>{% endfor %}
       </ul>
       {% else %}<p class="empty">No students match.</p>{% endif %}
+      {% endif %}
       {% endif %}
     </section>
 

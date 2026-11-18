@@ -1,6 +1,7 @@
 """Import the existing register from CSV (PLAN 1.5).
 
-books.csv:    book_id,name,author,copy_number,condition_notes
+books.csv:    book_id,name,author,category,copy_number,condition_notes
+              (category is optional)
 students.csv: student_id,name,grade,contact_email
 Re-importing updates names and details but never touches status or loans.
 """
@@ -19,13 +20,16 @@ def import_books(conn: sqlite3.Connection, path: str) -> int:
     for r in _rows(path):
         if not r.get("book_id") or not r.get("name"):
             continue
+        # A file without a category column leaves existing categories alone.
+        keep_category = "category" not in r
         conn.execute(
-            "INSERT INTO books (book_id, name, author, copy_number, condition_notes)"
-            " VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO books (book_id, name, author, category, copy_number, condition_notes)"
+            " VALUES (?, ?, ?, ?, ?, ?)"
             " ON CONFLICT(book_id) DO UPDATE SET name = excluded.name, author = excluded.author,"
-            " copy_number = excluded.copy_number, condition_notes = excluded.condition_notes",
-            (r["book_id"], r["name"], r.get("author", ""), int(r.get("copy_number") or 1),
-             r.get("condition_notes", "")),
+            + ("" if keep_category else " category = excluded.category,")
+            + " copy_number = excluded.copy_number, condition_notes = excluded.condition_notes",
+            (r["book_id"], r["name"], r.get("author", ""), r.get("category", ""),
+             int(r.get("copy_number") or 1), r.get("condition_notes", "")),
         )
         count += 1
     conn.commit()
