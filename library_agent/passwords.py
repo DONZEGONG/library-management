@@ -1,7 +1,9 @@
 """Committee sign-in passwords (AUTH_MODE=password).
 
 Each member creates their own password the first time they sign in, and can
-change it later after typing the current one. Only a salted PBKDF2 hash is
+change it later after typing the current one. With SHARED_PASSWORD=yes there is
+one password for every member instead: the first person to sign in creates it,
+and a change made by anyone changes it for everyone. Only a salted PBKDF2 hash is
 stored, in the member_passwords table. The librarian can clear a forgotten
 password with `python -m library_agent reset-password "Name"`.
 """
@@ -10,6 +12,7 @@ import hmac
 import secrets
 import time
 
+from .config import settings
 from .db import now
 
 ITERATIONS = 600_000
@@ -25,6 +28,34 @@ winter breeze marble violet copper pepper cotton saffron elephant rainbow""".spl
 def member_key(member: dict) -> str:
     """Members who share one email each get their own password, so the key is both."""
     return f"{member['email'].strip().lower()}|{member['name'].strip().lower()}"
+
+
+SHARED_KEY = "*shared*"
+
+
+def key_for(member: dict) -> str:
+    """The stored-password row this member signs in with."""
+    return SHARED_KEY if settings.shared_password else member_key(member)
+
+
+def _adopt_shared(conn) -> None:
+    """Switching to one shared password: the most recently set member password
+    becomes the shared one, so nobody has to make a new password."""
+    if conn.execute("SELECT 1 FROM member_passwords WHERE member_key = ?", (SHARED_KEY,)).fetchone():
+        return
+    row = conn.execute("SELECT password_hash, set_at FROM member_passwords "
+                       "ORDER BY set_at DESC LIMIT 1").fetchone()
+    if row:
+        conn.execute("INSERT INTO member_passwords (member_key, password_hash, set_at) VALUES (?, ?, ?)",
+                     (SHARED_KEY, row["password_hash"], row["set_at"]))
+        conn.commit()
+
+
+def _row(conn, member: dict):
+    if settings.shared_password:
+        _adopt_shared(conn)
+    return conn.execute("SELECT password_hash FROM member_passwords WHERE member_key = ?",
+                        (key_for(member),)).fetchone()
 
 
 def hash_password(password: str) -> str:
@@ -43,13 +74,11 @@ def check_hash(password: str, stored: str) -> bool:
 
 
 def has_password(conn, member: dict) -> bool:
-    return conn.execute("SELECT 1 FROM member_passwords WHERE member_key = ?",
-                        (member_key(member),)).fetchone() is not None
+    return _row(conn, member) is not None
 
 
 def verify(conn, member: dict, password: str) -> bool:
-    row = conn.execute("SELECT password_hash FROM member_passwords WHERE member_key = ?",
-                       (member_key(member),)).fetchone()
+    row = _row(conn, member)
     return row is not None and check_hash(password, row["password_hash"])
 
 
@@ -68,7 +97,7 @@ def set_password(conn, member: dict, password: str) -> None:
     conn.execute("INSERT INTO member_passwords (member_key, password_hash, set_at) VALUES (?, ?, ?) "
                  "ON CONFLICT(member_key) DO UPDATE SET password_hash = excluded.password_hash, "
                  "set_at = excluded.set_at",
-                 (member_key(member), hash_password(password), now()))
+                 (key_for(member), hash_password(password), now()))
     conn.commit()
 
 
@@ -76,6 +105,13 @@ def clear_password(conn, member: dict) -> bool:
     cur = conn.execute("DELETE FROM member_passwords WHERE member_key = ?", (member_key(member),))
     conn.commit()
     return cur.rowcount > 0
+
+
+def clear_all(conn) -> int:
+    """Remove every stored password, the shared one included."""
+    cur = conn.execute("DELETE FROM member_passwords")
+    conn.commit()
+    return cur.rowcount
 
 
 def suggestions(n: int = 3) -> list[str]:

@@ -25,7 +25,7 @@ def setup(tmp_path, monkeypatch):
 
 def _create(web, member, pw):
     r = web.post("/login/password", data={"member": member, "password": ""})
-    assert "Create your password" in r.text
+    assert "Create your password" in r.text or "Create the library password" in r.text
     return web.post("/login/setup", data={"new_password": pw, "confirm_password": pw},
                     follow_redirects=False)
 
@@ -129,3 +129,58 @@ def test_attempts_unlock_after_wait():
     assert a.locked("k") > 0
     t[0] += a.WAIT + 1
     assert a.locked("k") == 0
+
+
+# ------------------------------------------------------------ one shared password
+
+@pytest.fixture
+def shared(setup, monkeypatch):
+    monkeypatch.setattr(settings, "shared_password", True)
+    return setup
+
+
+def test_shared_password_is_made_once_and_works_for_everyone(shared):
+    web, _ = shared
+    r = web.post("/login/password", data={"member": "0"})
+    assert "Everyone on the committee will sign in with" in r.text
+    web.post("/login/setup", data={"new_password": "one-for-all", "confirm_password": "one-for-all"})
+    web.get("/logout")
+    # The other member does not make a new one; the same password signs them in.
+    r = web.post("/login/password", data={"member": "1", "password": "one-for-all"},
+                 follow_redirects=False)
+    assert r.status_code == 303 and web.get("/desk").status_code == 200
+
+
+def test_changing_shared_password_changes_it_for_everyone(shared):
+    web, _ = shared
+    _create(web, "0", "old-shared-pw")
+    assert "changing it changes it for" in web.get("/account/password").text
+    r = web.post("/account/password", data={"current_password": "old-shared-pw",
+                                            "new_password": "new-shared-pw",
+                                            "confirm_password": "new-shared-pw"},
+                 follow_redirects=False)
+    assert "for%20everyone" in r.headers["location"]
+    web.get("/logout")
+    assert "wrong" in web.post("/login/password", data={"member": "1", "password": "old-shared-pw"}).text
+    r = web.post("/login/password", data={"member": "1", "password": "new-shared-pw"},
+                 follow_redirects=False)
+    assert r.status_code == 303
+
+
+def test_switching_to_shared_keeps_the_existing_password(setup, monkeypatch):
+    web, _ = setup
+    _create(web, "0", "gunas-password")   # made while each member had their own
+    web.get("/logout")
+    monkeypatch.setattr(settings, "shared_password", True)
+    r = web.post("/login/password", data={"member": "1", "password": "gunas-password"},
+                 follow_redirects=False)
+    assert r.status_code == 303
+
+
+def test_reset_with_no_name_clears_the_shared_password(shared, capsys):
+    web, _ = shared
+    _create(web, "0", "shared-to-forget")
+    main(["reset-password"])
+    assert "All passwords cleared" in capsys.readouterr().out
+    web.get("/logout")
+    assert "Create the library password" in web.post("/login/password", data={"member": "1"}).text

@@ -150,7 +150,8 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
         return user
 
     def page(request, name, user, **ctx):
-        return TEMPLATES.TemplateResponse(request, name, {"user": user, **ctx})
+        return TEMPLATES.TemplateResponse(request, name, {"user": user,
+                                                          "shared_password": settings.shared_password, **ctx})
 
     # ------------------------------------------------------------ sign in
 
@@ -168,7 +169,8 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
                 conn.close()
         return TEMPLATES.TemplateResponse(request, "login.html", {
             "user": None, "mode": settings.auth_mode, "can_send": mailer.configured,
-            "members": members, "min_length": passwords.MIN_LENGTH, **ctx})
+            "members": members, "min_length": passwords.MIN_LENGTH,
+            "shared_password": settings.shared_password, **ctx})
 
     def _wait_message(seconds: int) -> str:
         minutes = max(1, (seconds + 59) // 60)
@@ -183,7 +185,7 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
         if not (member.isdigit() and int(member) < len(everyone)):
             return login_page(request, error="Choose your name from the list.")
         chosen, index = everyone[int(member)], int(member)
-        key = passwords.member_key(chosen)
+        key = passwords.key_for(chosen)
         wait = attempts.locked(key)
         if wait:
             return login_page(request, selected=index, error=_wait_message(wait))
@@ -212,7 +214,7 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
             return RedirectResponse("/login", 303)
         everyone = member_list(settings.members_file)
         chosen = everyone[pending["index"]] if pending["index"] < len(everyone) else None
-        if chosen is None or passwords.member_key(chosen) != pending["key"]:
+        if chosen is None or passwords.key_for(chosen) != pending["key"]:
             request.session.pop("setup", None)
             return RedirectResponse("/login", 303)
         error = passwords.problem(new_password, confirm_password)
@@ -224,13 +226,15 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
                 # Someone else finished setting it up first; sign in normally instead.
                 request.session.pop("setup", None)
                 return login_page(request, selected=pending["index"],
-                                  error="A password already exists for this name. Sign in with it.")
+                                  error="A password has already been made. Sign in with it.")
             passwords.set_password(conn, chosen, new_password)
         finally:
             conn.close()
         request.session.pop("setup", None)
         request.session["user"] = chosen
-        return _redirect("/desk", "Your password is saved. Use it every time you sign in.")
+        return _redirect("/desk", "The password is saved. Everyone now signs in with it."
+                         if settings.shared_password else
+                         "Your password is saved. Use it every time you sign in.")
 
     @app.get("/account/password", response_class=HTMLResponse)
     def change_password_form(request: Request, user=Depends(current_user)):
@@ -250,7 +254,7 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
             return page(request, "password.html", user, error=error, min_length=passwords.MIN_LENGTH,
                         suggestions=passwords.suggestions())
 
-        key = passwords.member_key(user)
+        key = passwords.key_for(user)
         wait = attempts.locked(key)
         if wait:
             return again(_wait_message(wait))
@@ -264,7 +268,9 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
         if new_password == current_password:
             return again("The new password is the same as the current one. Choose a different one.")
         passwords.set_password(conn, user, new_password)
-        return _redirect("/desk", "Your password has been changed. Use the new one next time you sign in.")
+        return _redirect("/desk", "The password has been changed for everyone. Tell the others the new one."
+                         if settings.shared_password else
+                         "Your password has been changed. Use the new one next time you sign in.")
 
     @app.get("/login", response_class=HTMLResponse)
     def login_form(request: Request):

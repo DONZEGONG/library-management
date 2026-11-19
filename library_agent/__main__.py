@@ -11,8 +11,10 @@
   shelf-check FILE.csv         export every book's status to tick off against the shelf
   report [--from D] [--to D]   proposals, rejections, corrections and approval wait times
                                (default: the last 30 days)
-  reset-password "NAME"        clear a member's forgotten password (AUTH_MODE=password);
-                               they create a new one at their next sign-in
+  reset-password ["NAME"]      clear a member's forgotten password (AUTH_MODE=password);
+                               they create a new one at their next sign-in. With no
+                               name, clears every password, the shared one included
+                               (use this with SHARED_PASSWORD=yes)
 """
 import argparse
 import json
@@ -39,7 +41,7 @@ def main(argv=None):
     r = sub.add_parser("report")
     r.add_argument("--from", dest="start", type=date.fromisoformat)
     r.add_argument("--to", dest="end", type=date.fromisoformat)
-    sub.add_parser("reset-password").add_argument("name")
+    sub.add_parser("reset-password").add_argument("name", nargs="?")
     s = sub.add_parser("serve")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8000)
@@ -76,6 +78,9 @@ def main(argv=None):
         end = args.end or date.today()
         start = args.start or end - timedelta(days=30)
         print(reports.format_report(reports.period_report(conn, start, end)))
+    elif args.cmd == "reset-password" and not args.name:
+        passwords.clear_all(conn)
+        print("All passwords cleared. The next person to sign in creates a new one.")
     elif args.cmd == "reset-password":
         from .web.app import member_list
 

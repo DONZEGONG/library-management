@@ -90,6 +90,7 @@ review. Use it for the trial week (PLAN 6.2, 6.3) and the monthly correction-log
 | `COMMITTEE_EMAIL` | `library-committee@school.example` | Where red alerts go |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | | School email server. With no `SMTP_HOST`, messages are only recorded in the database. |
 | `AUTH_MODE` | `dev` | `dev` = pick your name (local testing only). `code` = members type their school email and get a one-time 6-digit code by email (needs the `SMTP_*` settings; for Gmail use `smtp.gmail.com`, port 587 and an app password). `header` = a school sign-in proxy passes the signed-in email in `AUTH_HEADER`. `password` = members choose their name and type their own password; they create it at first sign-in and can change it from the top bar (forgotten: `python -m library_agent reset-password "Name"`). |
+| `SHARED_PASSWORD` | `no` | With `AUTH_MODE=password`: `yes` = everyone signs in with one shared password (the first person to sign in creates it; changing it changes it for everyone; reset with `python -m library_agent reset-password` and no name). `no` = each member has their own. |
 | `SESSION_SECRET` | `change-me` | Set a long random value in real use |
 | `AI_PROVIDER` | `none` | `none` = Desk only, no AI. `anthropic` = also turn on the AI chat. |
 | `LIBRARY_AGENT_MODEL` | `claude-opus-5-5` | Claude model (only when the AI chat is on) |
