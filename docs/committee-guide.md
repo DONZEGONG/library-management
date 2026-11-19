@@ -1,6 +1,8 @@
-# Library committee guide
+# LibraMind AI: library committee guide
 
-**Sign in** by typing your school email. The app emails you a 6-digit code; type it in. Each code works once, for 10 minutes. You will see Desk, Approvals, Register and Correction log
+LibraMind AI is the school library's app. **Sign in** by choosing your name and typing the library
+password. Everyone on the committee uses the same password. To change it, click **change password**
+in the top bar and type the current password first; this changes it for everyone. You will see Desk, Approvals, Register and Correction log
 (and Chat, if the AI chat has been switched on).
 
 ## Find a book or student
