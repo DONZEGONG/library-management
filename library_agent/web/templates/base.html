@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Library{% endblock %} · School Library</title>
+<title>{% block title %}Library{% endblock %} · LibraMind AI</title>
 <style>
   :root { --ink:#1d2433; --muted:#5b6475; --line:#d9dde5; --bg:#f1f5fb; --brand-navy:#0f2944; --on-navy:#ffffff; --on-navy-muted:#c3cfe0; --accent:var(--brand-navy); --red:#c62828; --redbg:#fdecec; }
   * { box-sizing: border-box; }
@@ -13,6 +13,8 @@
   nav a:focus-visible { outline:2px solid var(--on-navy); outline-offset:3px; border-radius:4px; }
   nav .brand { display:inline-flex; align-items:center; gap:.6rem; }
   nav .brand img { width:36px; height:36px; border-radius:8px; background:var(--on-navy); }
+  nav .brand-name { display:flex; flex-direction:column; line-height:1.15; }
+  nav .brand-name small { color:var(--on-navy-muted); font-size:.75rem; }
   nav .who { margin-left:auto; color:var(--on-navy-muted); font-size:.9rem; } nav .who a { color:var(--on-navy); }
   main { max-width:1000px; margin:1.5rem auto; padding:0 1rem; }
   h1 { font-size:1.4rem; margin:.2rem 0 1rem; }
@@ -44,9 +46,14 @@
 {% block head %}{% endblock %}
 </head>
 <body>
+{% if not user %}
+<nav>
+  <span class="brand"><img src="/static/logo-mark.png" alt="" width="36" height="36"><span class="brand-name"><b>LibraMind AI</b><small>School Library</small></span></span>
+</nav>
+{% endif %}
 {% if user %}
 <nav>
-  <a class="brand" href="/"><img src="/static/logo-mark.png" alt="" width="36" height="36"><b>School Library</b></a>
+  <a class="brand" href="/"><img src="/static/logo-mark.png" alt="" width="36" height="36"><span class="brand-name"><b>LibraMind AI</b><small>School Library</small></span></a>
   <a href="/desk">Desk</a>
   {% if ai_enabled %}<a href="/">Chat</a>{% endif %}
   <a href="/approvals">Approvals</a>

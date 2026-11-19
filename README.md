@@ -1,4 +1,6 @@
-# AI Library Management Agent
+# LibraMind AI
+
+LibraMind AI is the school's AI library management agent.
 
 A web app over a library database for a school library committee. Committee members record
 borrowings, returns, damage reports, renewals and reservations on the **Desk** page. Every

@@ -1,4 +1,4 @@
-# AI Library Management Agent: Project Specification
+# LibraMind AI (AI Library Management Agent): Project Specification
 
 ## Problem and proposed solution
 

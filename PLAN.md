@@ -1,4 +1,4 @@
-# AI Library Management Agent: Implementation Plan
+# LibraMind AI (AI Library Management Agent): Implementation Plan
 
 > Based on [SPEC.md](SPEC.md). Each task names the spec layer it implements. Tick the boxes as work is done.
 

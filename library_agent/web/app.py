@@ -108,7 +108,7 @@ DESK_BOOK_LIMIT = 100  # enough to list the largest category (Stories) in full
 
 def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | None = None,
                ai_enabled: bool | None = None) -> FastAPI:
-    app = FastAPI(title="Library Management Agent")
+    app = FastAPI(title="LibraMind AI")
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret)
     # The school logo and other images.
     app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
