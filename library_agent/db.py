@@ -131,6 +131,14 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     messages   TEXT NOT NULL DEFAULT '[]',
     updated_at TEXT NOT NULL
 );
+
+-- Committee sign-in passwords (AUTH_MODE=password). Only a salted hash is kept,
+-- never the password itself.
+CREATE TABLE IF NOT EXISTS member_passwords (
+    member_key    TEXT PRIMARY KEY,
+    password_hash TEXT NOT NULL,
+    set_at        TEXT NOT NULL
+);
 """
 
 

@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from .. import approvals, librarian, register
+from .. import approvals, librarian, passwords, register
 from ..agent import LibraryAgent
 from ..config import settings
 from ..db import connect, init_db
@@ -32,8 +32,8 @@ def _redirect(path: str, message) -> RedirectResponse:
 
 def member_list(path: str) -> list[dict]:
     """members.csv: name,email,role (role is committee or librarian).
-    The app keeps no passwords; sign-in is done by the school's accounts.
-    Several members may share one email; they choose their name after signing in."""
+    With AUTH_MODE=password each member's password hash is kept in the database
+    (see passwords.py); other modes keep no passwords. Several members may share one email; they choose their name after signing in."""
     p = Path(path)
     if not p.exists():
         return []
@@ -116,6 +116,7 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
     if ai_enabled is None:
         ai_enabled = settings.ai_provider == "anthropic"
     TEMPLATES.env.globals["ai_enabled"] = ai_enabled
+    TEMPLATES.env.globals["auth_mode"] = settings.auth_mode
     mailer = mailer or Mailer()
     agent_factory = agent_factory or (lambda conn: LibraryAgent(conn))
 
@@ -155,10 +156,115 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
 
     codes = LoginCodes()
 
+    attempts = passwords.Attempts()
+
     def login_page(request, **ctx):
+        members = member_list(settings.members_file)
+        if settings.auth_mode == "password":
+            conn = connect(db_path)
+            try:
+                members = [{**m, "has_password": passwords.has_password(conn, m)} for m in members]
+            finally:
+                conn.close()
         return TEMPLATES.TemplateResponse(request, "login.html", {
             "user": None, "mode": settings.auth_mode, "can_send": mailer.configured,
-            "members": member_list(settings.members_file), **ctx})
+            "members": members, "min_length": passwords.MIN_LENGTH, **ctx})
+
+    def _wait_message(seconds: int) -> str:
+        minutes = max(1, (seconds + 59) // 60)
+        return (f"Too many wrong passwords. Please wait {minutes} minute{'s' if minutes > 1 else ''} "
+                "and try again.")
+
+    @app.post("/login/password", response_class=HTMLResponse)
+    def login_password(request: Request, member: str = Form(""), password: str = Form("")):
+        if settings.auth_mode != "password":
+            raise HTTPException(404)
+        everyone = member_list(settings.members_file)
+        if not (member.isdigit() and int(member) < len(everyone)):
+            return login_page(request, error="Choose your name from the list.")
+        chosen, index = everyone[int(member)], int(member)
+        key = passwords.member_key(chosen)
+        wait = attempts.locked(key)
+        if wait:
+            return login_page(request, selected=index, error=_wait_message(wait))
+        conn = connect(db_path)
+        try:
+            if not passwords.has_password(conn, chosen):
+                # First sign-in: this member now creates their password.
+                request.session["setup"] = {"index": index, "key": key,
+                                            "until": time.time() + CHOOSE_WITHIN}
+                return login_page(request, setup=chosen, suggestions=passwords.suggestions())
+            ok = passwords.verify(conn, chosen, password)
+        finally:
+            conn.close()
+        if not ok:
+            attempts.failed(key)
+            return login_page(request, selected=index, error="That password is wrong. Try again.")
+        attempts.succeeded(key)
+        request.session["user"] = chosen
+        return RedirectResponse("/", 303)
+
+    @app.post("/login/setup", response_class=HTMLResponse)
+    def login_setup(request: Request, new_password: str = Form(""), confirm_password: str = Form("")):
+        pending = request.session.get("setup")
+        if settings.auth_mode != "password" or not pending or time.time() > pending["until"]:
+            request.session.pop("setup", None)
+            return RedirectResponse("/login", 303)
+        everyone = member_list(settings.members_file)
+        chosen = everyone[pending["index"]] if pending["index"] < len(everyone) else None
+        if chosen is None or passwords.member_key(chosen) != pending["key"]:
+            request.session.pop("setup", None)
+            return RedirectResponse("/login", 303)
+        error = passwords.problem(new_password, confirm_password)
+        if error:
+            return login_page(request, setup=chosen, suggestions=passwords.suggestions(), error=error)
+        conn = connect(db_path)
+        try:
+            if passwords.has_password(conn, chosen):
+                # Someone else finished setting it up first; sign in normally instead.
+                request.session.pop("setup", None)
+                return login_page(request, selected=pending["index"],
+                                  error="A password already exists for this name. Sign in with it.")
+            passwords.set_password(conn, chosen, new_password)
+        finally:
+            conn.close()
+        request.session.pop("setup", None)
+        request.session["user"] = chosen
+        return _redirect("/desk", "Your password is saved. Use it every time you sign in.")
+
+    @app.get("/account/password", response_class=HTMLResponse)
+    def change_password_form(request: Request, user=Depends(current_user)):
+        if settings.auth_mode != "password":
+            raise HTTPException(404)
+        return page(request, "password.html", user, min_length=passwords.MIN_LENGTH,
+                    suggestions=passwords.suggestions())
+
+    @app.post("/account/password", response_class=HTMLResponse)
+    def change_password(request: Request, current_password: str = Form(""),
+                        new_password: str = Form(""), confirm_password: str = Form(""),
+                        user=Depends(current_user), conn=Depends(get_conn)):
+        if settings.auth_mode != "password":
+            raise HTTPException(404)
+
+        def again(error):
+            return page(request, "password.html", user, error=error, min_length=passwords.MIN_LENGTH,
+                        suggestions=passwords.suggestions())
+
+        key = passwords.member_key(user)
+        wait = attempts.locked(key)
+        if wait:
+            return again(_wait_message(wait))
+        if not passwords.verify(conn, user, current_password):
+            attempts.failed(key)
+            return again("Your current password is wrong, so the password was not changed.")
+        attempts.succeeded(key)
+        error = passwords.problem(new_password, confirm_password)
+        if error:
+            return again(error)
+        if new_password == current_password:
+            return again("The new password is the same as the current one. Choose a different one.")
+        passwords.set_password(conn, user, new_password)
+        return _redirect("/desk", "Your password has been changed. Use the new one next time you sign in.")
 
     @app.get("/login", response_class=HTMLResponse)
     def login_form(request: Request):

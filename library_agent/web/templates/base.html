@@ -36,6 +36,10 @@
   .stats { display:flex; gap:1rem; flex-wrap:wrap; }
   .stat { background:#fff; border:1px solid var(--line); border-radius:8px; padding:.8rem 1.2rem; min-width:140px; }
   .stat b { display:block; font-size:1.6rem; }
+  .stack { display:flex; flex-direction:column; gap:.4rem; max-width:420px; }
+  .stack label { font-weight:600; margin-top:.4rem; } .stack label.check { font-weight:400; }
+  h2.sub { font-size:1.1rem; margin:.2rem 0 .6rem; }
+  .suggest code { font-size:.95rem; }
 </style>
 {% block head %}{% endblock %}
 </head>
@@ -49,7 +53,8 @@
   <a href="/register">Register</a>
   {% if user.role == 'librarian' %}<a href="/librarian">Librarian tools</a>{% endif %}
   <a href="/corrections">Correction log</a>
-  <span class="who">{{ user.name }} ({{ user.role }}) · <a href="/logout">sign out</a></span>
+  <span class="who">{{ user.name }} ({{ user.role }}) ·
+    {% if auth_mode == 'password' %}<a href="/account/password">change password</a> · {% endif %}<a href="/logout">sign out</a></span>
 </nav>
 {% endif %}
 <main>
