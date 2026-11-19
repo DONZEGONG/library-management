@@ -30,7 +30,7 @@
         <a href="/login">use a different email</a>.</p>
     </form>
     {% else %}
-    <p>Type your school email. We'll email you a code to sign in. This app never stores passwords.</p>
+    <p>Type your school email. We'll email you a code to sign in. No password is needed.</p>
     <form method="post" action="/login/code" class="row">
       <label for="email" class="visually-hidden">School email</label>
       <input id="email" name="email" type="email" autocomplete="email" value="{{ email or '' }}"
@@ -39,9 +39,39 @@
     </form>
     {% endif %}
 
+  {% elif mode == "password" %}
+    {% if setup %}
+    <h2 class="sub">Create your password, {{ setup.name }}</h2>
+    <p>This is your first time signing in, so make a password now. Type your own, or pick one of the
+      suggestions below. Then type it again to confirm it. You will use it every time you sign in.</p>
+    {% from "_new_password.html" import new_password_fields with context %}
+    <form method="post" action="/login/setup" class="stack">
+      {{ new_password_fields() }}
+      <div class="row"><button>Save password and sign in</button> <a href="/login">Cancel</a></div>
+    </form>
+    {% else %}
+    <p>Choose your name and type your password.</p>
+    {% if members %}
+    <form method="post" action="/login/password" class="stack">
+      <label for="member">Name</label>
+      <select id="member" name="member">
+        {% for m in members %}<option value="{{ loop.index0 }}" {% if selected == loop.index0 %}selected{% endif %}>{{ m.name }} ({{ m.role }}){% if not m.has_password %} - first time, no password yet{% endif %}</option>{% endfor %}
+      </select>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" autofocus>
+      <div><button>Sign in</button></div>
+    </form>
+    <p class="muted">First time? Choose your name and press Sign in with the password box empty.
+      You will then create your password. Forgot it? Ask the librarian to reset it.</p>
+    {% else %}
+    <p>No committee members yet. Copy <code>members.example.csv</code> to <code>members.csv</code> and add names.</p>
+    {% endif %}
+    {% endif %}
+
   {% else %}
   <p class="muted">Local testing mode: choose your name. For real use, set <code>AUTH_MODE=code</code>
-  so members sign in with a code sent to their school email. This app never stores passwords.</p>
+  so members sign in with a code sent to their school email, or <code>AUTH_MODE=password</code>
+  so each member signs in with their own password.</p>
   {% if members %}
   <form method="post" action="/login" class="row">
     <select name="member">
