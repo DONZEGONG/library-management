@@ -41,28 +41,41 @@
 
   {% elif mode == "password" %}
     {% if setup %}
+    {% if shared_password %}
+    <h2 class="sub">Create the library password, {{ setup.name }}</h2>
+    <p>No password has been made yet, so make one now. <b>Everyone on the committee will sign in with
+      this same password.</b> Type your own, or pick one of the suggestions below. Then type it again
+      to confirm it.</p>
+    {% else %}
     <h2 class="sub">Create your password, {{ setup.name }}</h2>
     <p>This is your first time signing in, so make a password now. Type your own, or pick one of the
       suggestions below. Then type it again to confirm it. You will use it every time you sign in.</p>
+    {% endif %}
     {% from "_new_password.html" import new_password_fields with context %}
     <form method="post" action="/login/setup" class="stack">
       {{ new_password_fields() }}
       <div class="row"><button>Save password and sign in</button> <a href="/login">Cancel</a></div>
     </form>
     {% else %}
-    <p>Choose your name and type your password.</p>
+    <p>Choose your name and type {% if shared_password %}the library password. Everyone uses the same one.{% else %}your password.{% endif %}</p>
     {% if members %}
     <form method="post" action="/login/password" class="stack">
       <label for="member">Name</label>
       <select id="member" name="member">
-        {% for m in members %}<option value="{{ loop.index0 }}" {% if selected == loop.index0 %}selected{% endif %}>{{ m.name }} ({{ m.role }}){% if not m.has_password %} - first time, no password yet{% endif %}</option>{% endfor %}
+        {% for m in members %}<option value="{{ loop.index0 }}" {% if selected == loop.index0 %}selected{% endif %}>{{ m.name }} ({{ m.role }}){% if not m.has_password and not shared_password %} - first time, no password yet{% endif %}</option>{% endfor %}
       </select>
       <label for="password">Password</label>
       <input id="password" name="password" type="password" autocomplete="current-password" autofocus>
       <div><button>Sign in</button></div>
     </form>
+    {% if shared_password %}
+    <p class="muted">{% if members and not members[0].has_password %}No password has been made yet. Choose your
+      name and press Sign in with the password box empty to create it for everyone.{% else %}Forgot the
+      password? Ask the librarian to reset it.{% endif %}</p>
+    {% else %}
     <p class="muted">First time? Choose your name and press Sign in with the password box empty.
       You will then create your password. Forgot it? Ask the librarian to reset it.</p>
+    {% endif %}
     {% else %}
     <p>No committee members yet. Copy <code>members.example.csv</code> to <code>members.csv</code> and add names.</p>
     {% endif %}

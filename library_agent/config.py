@@ -47,6 +47,9 @@ class Settings:
     # SMTP_HOST) or "header" (a school sign-in proxy puts the signed-in email
     # in a header).
     auth_mode: str = os.environ.get("AUTH_MODE", "dev")
+    # With AUTH_MODE=password: "yes" gives every member one shared password,
+    # "no" (default) gives each member their own.
+    shared_password: bool = os.environ.get("SHARED_PASSWORD", "no").strip().lower() in ("1", "yes", "true")
     auth_header: str = os.environ.get("AUTH_HEADER", "X-Forwarded-Email")
     session_secret: str = os.environ.get("SESSION_SECRET", "change-me")
     members_file: str = os.environ.get("MEMBERS_FILE", str(BASE_DIR / "members.csv"))
