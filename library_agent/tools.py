@@ -290,7 +290,7 @@ def _schema(props: dict, required: list[str]) -> dict:
 _S = {"type": "string"}
 
 TOOLS = {
-    "find_book": (find_book, "low", "Search the catalogue by book name, author or book ID.",
+    "find_book": (find_book, "low", "Search the catalogue by book name, author, category or book ID.",
                   _schema({"query": _S}, ["query"])),
     "check_availability": (check_availability, "low",
                            "Status of one book copy: in the library or with whom, and the due date.",

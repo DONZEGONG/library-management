@@ -1,4 +1,4 @@
-# AI Library Management Agent: Implementation Plan
+# LibraMind AI (AI Library Management Agent): Implementation Plan
 
 > Based on [SPEC.md](SPEC.md). Each task names the spec layer it implements. Tick the boxes as work is done.
 
@@ -112,7 +112,7 @@ Every tool records who used it and when. Write tools never change records direct
 - [x] **4.1 System prompt:** start from the Layer 7 prompt and add these rules:
   - never decide fines, deletions, due-date changes or who is responsible for a missing book
   - always say when an action is waiting for approval
-  - never store passwords or unnecessary personal data
+  - never store plain passwords or unnecessary personal data (sign-in passwords, if used, are kept only as salted hashes)
   - say "I don't know" rather than guess
 - [x] **4.2 Agent loop:** the user's request goes to the agent, which calls tools and replies. It stops after a fixed number of steps.
 - [x] **4.3 When the agent doesn't know (Layer 5):** search the register and rules, ask the user, check the database, suggest escalating to the librarian, then say "I don't know".
@@ -133,7 +133,9 @@ Every tool records who used it and when. Write tools never change records direct
 - [x] **5.5 Librarian tools page:** set fines, mark lost, delete, change due dates, correct states. Each one asks for a reason.
 - [x] **5.6 Correction log page:** a read-only list of all corrections
 - [ ] **5.7 Committee login:** each committee member signs in so approvals record a real name. The library app does not store passwords itself. Use the school's existing accounts or a simple shared sign-in service.
-  - *Built:* `AUTH_MODE=header` takes the signed-in email from a school sign-in proxy and checks it against `members.csv`. `AUTH_MODE=dev` (pick a name) is for local testing only. Still to do: connect the school's sign-in service.
+  - *Built:* `AUTH_MODE=header` takes the signed-in email from a school sign-in proxy and checks it against `members.csv`. `AUTH_MODE=dev` (pick a name) is for local testing only. `AUTH_MODE=code` (added 2026-11-18) emails a one-time code to a school address on `members.csv` instead, with no proxy needed; the school chose this route. Still to do: set up the sending Gmail account and the real members list on the school machine.
+  - *Added 2026-11-19:* `AUTH_MODE=password`. Each member picks their name and creates their own password the first time (typed twice to confirm, or chosen from suggestions). Only a salted PBKDF2 hash is stored, in the `member_passwords` table. Members change it from "change password" in the top bar after typing the current one. After 5 wrong tries a name is locked for 5 minutes. The librarian clears a forgotten password with `python -m library_agent reset-password "Name"`.
+  - *Added 2026-11-19:* `SHARED_PASSWORD=yes` makes everyone use one shared password instead (the school's choice). The first person to sign in creates it, and changing it (after typing the current one) changes it for everyone. When switched on, the most recently set member password becomes the shared one. `reset-password` with no name clears it.
 
 - [x] **5.8 Desk page (no AI needed):** forms for borrow, return (good or damaged), renew, reserve and refer to the librarian, plus a book and student look-up. Each form calls the same tools as the agent, so every check, the audit log and Approvals stay the same; approvals show "Desk entry by <name>". The AI chat is optional (`AI_PROVIDER=anthropic`); by default it is off and the home page opens the Desk. Decided 2026-11-10 to avoid API costs; the facilitator agreed.
 

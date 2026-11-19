@@ -59,12 +59,22 @@ class Settings:
     model: str = os.environ.get("LIBRARY_AGENT_MODEL", "claude-opus-5-5")
     agent_max_steps: int = _int("AGENT_MAX_STEPS", 8)
 
-    # Web sign-in: "dev" (pick a name, local testing only) or "header"
-    # (a school sign-in proxy puts the signed-in email in a header).
+    # Web sign-in: "dev" (pick a name, local testing only), "code" (the app
+    # emails a one-time code to a school address on the committee list; needs
+    # SMTP_HOST) or "header" (a school sign-in proxy puts the signed-in email
+    # in a header).
     auth_mode: str = os.environ.get("AUTH_MODE", "dev")
+    # With AUTH_MODE=password: "yes" gives every member one shared password,
+    # "no" (default) gives each member their own.
+    shared_password: bool = os.environ.get("SHARED_PASSWORD", "no").strip().lower() in ("1", "yes", "true")
     auth_header: str = os.environ.get("AUTH_HEADER", "X-Forwarded-Email")
     session_secret: str = os.environ.get("SESSION_SECRET", "change-me")
     members_file: str = os.environ.get("MEMBERS_FILE", str(BASE_DIR / "members.csv"))
+    # On a host with no members.csv file (Vercel), the same CSV text can be
+    # given in MEMBERS_CSV instead. It wins over MEMBERS_FILE when set.
+    members_csv: str = os.environ.get("MEMBERS_CSV", "")
+    # Vercel cron calls /cron/daily-job with "Authorization: Bearer <CRON_SECRET>".
+    cron_secret: str = os.environ.get("CRON_SECRET", "")
 
     backup_dir: str = os.environ.get("BACKUP_DIR", str(BASE_DIR / "backups"))
     knowledge_dir: Path = field(default=BASE_DIR / "library_agent" / "knowledge")

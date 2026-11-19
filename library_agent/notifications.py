@@ -50,6 +50,11 @@ class Mailer:
     def __init__(self):
         self.outbox: list[EmailMessage] = []
 
+    @property
+    def configured(self) -> bool:
+        """True when messages really leave this computer."""
+        return bool(settings.smtp_host)
+
     def send(self, to: str, subject: str, body: str) -> None:
         msg = EmailMessage()
         msg["From"], msg["To"], msg["Subject"] = settings.mail_from, to, subject

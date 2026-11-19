@@ -1,6 +1,12 @@
 ﻿"""Web interface (PLAN Phase 5)."""
 import csv
+import hashlib
+import hmac
+import io
 import json
+import secrets
+import smtplib
+import time
 from datetime import date
 from pathlib import Path
 from urllib.parse import quote
@@ -11,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from .. import approvals, librarian, register
+from .. import approvals, librarian, passwords, register
 from ..agent import LibraryAgent
 from ..config import settings
 from ..db import connect, init_db
@@ -25,25 +31,89 @@ def _redirect(path: str, message) -> RedirectResponse:
     return RedirectResponse(f"{path}?msg={quote(str(message))}", 303)
 
 
-def load_members(path: str) -> dict[str, dict]:
+def member_list(path: str) -> list[dict]:
     """members.csv: name,email,role (role is committee or librarian).
-    The app keeps no passwords; sign-in is done by the school's accounts."""
-    p = Path(path)
-    if not p.exists():
-        return {}
-    with p.open(newline="", encoding="utf-8-sig") as f:
-        return {r["email"].strip().lower(): {"name": r["name"].strip(), "email": r["email"].strip().lower(),
-                                             "role": (r.get("role") or "committee").strip()}
-                for r in csv.DictReader(f) if r.get("email")}
+    With AUTH_MODE=password each member's password hash is kept in the database
+    (see passwords.py); other modes keep no passwords. Several members may share one email; they choose their name after signing in."""
+    if settings.members_csv.strip():
+        # A single-line setting may write line breaks as \n.
+        text = settings.members_csv.replace("\\n", "\n").lstrip("﻿")
+    else:
+        p = Path(path)
+        if not p.exists():
+            return []
+        text = p.read_text(encoding="utf-8-sig")
+    return [{"name": r["name"].strip(), "email": r["email"].strip().lower(),
+             "role": (r.get("role") or "committee").strip()}
+            for r in csv.DictReader(io.StringIO(text)) if r.get("email") and (r.get("name") or "").strip()]
+
+
+def load_members(path: str) -> dict[str, dict]:
+    """The first member listed for each email."""
+    members: dict[str, dict] = {}
+    for m in member_list(path):
+        members.setdefault(m["email"], m)
+    return members
+
+
+def members_for(path: str, email: str) -> list[dict]:
+    return [m for m in member_list(path) if m["email"] == email.strip().lower()]
+
+
+CHOOSE_WITHIN = 10 * 60  # seconds to pick a name after a shared email's code
+
+
+class LoginCodes:
+    """One-time sign-in codes, kept in memory only (a restart cancels them).
+    Only a hash of each code is held."""
+    LIFETIME = 10 * 60    # seconds a code stays valid
+    RESEND_AFTER = 60     # seconds before another code can be sent
+    MAX_TRIES = 5         # wrong guesses before the code is cancelled
+
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self._codes: dict[str, dict] = {}
+
+    @staticmethod
+    def _hash(code: str) -> str:
+        return hashlib.sha256(code.encode()).hexdigest()
+
+    def issue(self, email: str) -> str | None:
+        now = self.clock()
+        old = self._codes.get(email)
+        if old and now - old["issued"] < self.RESEND_AFTER:
+            return None
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        self._codes[email] = {"hash": self._hash(code), "issued": now, "tries": 0}
+        return code
+
+    def check(self, email: str, code: str) -> bool:
+        entry = self._codes.get(email)
+        if entry is None:
+            return False
+        if self.clock() - entry["issued"] > self.LIFETIME:
+            self.discard(email)
+            return False
+        entry["tries"] += 1
+        if hmac.compare_digest(entry["hash"], self._hash(code.strip().replace(" ", ""))):
+            self.discard(email)
+            return True
+        if entry["tries"] >= self.MAX_TRIES:
+            self.discard(email)
+        return False
+
+    def discard(self, email: str) -> None:
+        self._codes.pop(email, None)
 
 
 DESK_TOOLS = {"borrow": "save_borrowing_details", "return": "update_return_status",
               "renew": "renew_loan", "reserve": "reserve_book", "refer": "escalate_to_librarian"}
+DESK_BOOK_LIMIT = 100  # enough to list the largest category (Stories) in full
 
 
 def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | None = None,
                ai_enabled: bool | None = None) -> FastAPI:
-    app = FastAPI(title="Library Management Agent")
+    app = FastAPI(title="LibraMind AI")
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret)
     # The school logo and other images.
     app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
@@ -51,6 +121,7 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
     if ai_enabled is None:
         ai_enabled = settings.ai_provider == "anthropic"
     TEMPLATES.env.globals["ai_enabled"] = ai_enabled
+    TEMPLATES.env.globals["auth_mode"] = settings.auth_mode
     mailer = mailer or Mailer()
     agent_factory = agent_factory or (lambda conn: LibraryAgent(conn))
 
@@ -84,20 +155,200 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
         return user
 
     def page(request, name, user, **ctx):
-        return TEMPLATES.TemplateResponse(request, name, {"user": user, **ctx})
+        return TEMPLATES.TemplateResponse(request, name, {"user": user,
+                                                          "shared_password": settings.shared_password, **ctx})
 
-    # ------------------------------------------------------------ sign in (dev mode)
+    # ------------------------------------------------------------ sign in
+
+    codes = LoginCodes()
+
+    attempts = passwords.Attempts(connect=lambda: connect(db_path))
+
+    def login_page(request, **ctx):
+        members = member_list(settings.members_file)
+        if settings.auth_mode == "password":
+            conn = connect(db_path)
+            try:
+                members = [{**m, "has_password": passwords.has_password(conn, m)} for m in members]
+            finally:
+                conn.close()
+        return TEMPLATES.TemplateResponse(request, "login.html", {
+            "user": None, "mode": settings.auth_mode, "can_send": mailer.configured,
+            "members": members, "min_length": passwords.MIN_LENGTH,
+            "shared_password": settings.shared_password, **ctx})
+
+    def _wait_message(seconds: int) -> str:
+        minutes = max(1, (seconds + 59) // 60)
+        return (f"Too many wrong passwords. Please wait {minutes} minute{'s' if minutes > 1 else ''} "
+                "and try again.")
+
+    @app.post("/login/password", response_class=HTMLResponse)
+    def login_password(request: Request, member: str = Form(""), password: str = Form("")):
+        if settings.auth_mode != "password":
+            raise HTTPException(404)
+        everyone = member_list(settings.members_file)
+        if not (member.isdigit() and int(member) < len(everyone)):
+            return login_page(request, error="Choose your name from the list.")
+        chosen, index = everyone[int(member)], int(member)
+        key = passwords.key_for(chosen)
+        wait = attempts.locked(key)
+        if wait:
+            return login_page(request, selected=index, error=_wait_message(wait))
+        conn = connect(db_path)
+        try:
+            if not passwords.has_password(conn, chosen):
+                # First sign-in: this member now creates their password.
+                request.session["setup"] = {"index": index, "key": key,
+                                            "until": time.time() + CHOOSE_WITHIN}
+                return login_page(request, setup=chosen, suggestions=passwords.suggestions())
+            ok = passwords.verify(conn, chosen, password)
+        finally:
+            conn.close()
+        if not ok:
+            attempts.failed(key)
+            return login_page(request, selected=index, error="That password is wrong. Try again.")
+        attempts.succeeded(key)
+        request.session["user"] = chosen
+        return RedirectResponse("/", 303)
+
+    @app.post("/login/setup", response_class=HTMLResponse)
+    def login_setup(request: Request, new_password: str = Form(""), confirm_password: str = Form("")):
+        pending = request.session.get("setup")
+        if settings.auth_mode != "password" or not pending or time.time() > pending["until"]:
+            request.session.pop("setup", None)
+            return RedirectResponse("/login", 303)
+        everyone = member_list(settings.members_file)
+        chosen = everyone[pending["index"]] if pending["index"] < len(everyone) else None
+        if chosen is None or passwords.key_for(chosen) != pending["key"]:
+            request.session.pop("setup", None)
+            return RedirectResponse("/login", 303)
+        error = passwords.problem(new_password, confirm_password)
+        if error:
+            return login_page(request, setup=chosen, suggestions=passwords.suggestions(), error=error)
+        conn = connect(db_path)
+        try:
+            if passwords.has_password(conn, chosen):
+                # Someone else finished setting it up first; sign in normally instead.
+                request.session.pop("setup", None)
+                return login_page(request, selected=pending["index"],
+                                  error="A password has already been made. Sign in with it.")
+            passwords.set_password(conn, chosen, new_password)
+        finally:
+            conn.close()
+        request.session.pop("setup", None)
+        request.session["user"] = chosen
+        return _redirect("/desk", "The password is saved. Everyone now signs in with it."
+                         if settings.shared_password else
+                         "Your password is saved. Use it every time you sign in.")
+
+    @app.get("/account/password", response_class=HTMLResponse)
+    def change_password_form(request: Request, user=Depends(current_user)):
+        if settings.auth_mode != "password":
+            raise HTTPException(404)
+        return page(request, "password.html", user, min_length=passwords.MIN_LENGTH,
+                    suggestions=passwords.suggestions())
+
+    @app.post("/account/password", response_class=HTMLResponse)
+    def change_password(request: Request, current_password: str = Form(""),
+                        new_password: str = Form(""), confirm_password: str = Form(""),
+                        user=Depends(current_user), conn=Depends(get_conn)):
+        if settings.auth_mode != "password":
+            raise HTTPException(404)
+
+        def again(error):
+            return page(request, "password.html", user, error=error, min_length=passwords.MIN_LENGTH,
+                        suggestions=passwords.suggestions())
+
+        key = passwords.key_for(user)
+        wait = attempts.locked(key)
+        if wait:
+            return again(_wait_message(wait))
+        if not passwords.verify(conn, user, current_password):
+            attempts.failed(key)
+            return again("Your current password is wrong, so the password was not changed.")
+        attempts.succeeded(key)
+        error = passwords.problem(new_password, confirm_password)
+        if error:
+            return again(error)
+        if new_password == current_password:
+            return again("The new password is the same as the current one. Choose a different one.")
+        passwords.set_password(conn, user, new_password)
+        return _redirect("/desk", "The password has been changed for everyone. Tell the others the new one."
+                         if settings.shared_password else
+                         "Your password has been changed. Use the new one next time you sign in.")
 
     @app.get("/login", response_class=HTMLResponse)
     def login_form(request: Request):
         if settings.auth_mode == "header":
             return RedirectResponse("/", 303)
-        return TEMPLATES.TemplateResponse(request, "login.html",
-                                          {"user": None, "members": load_members(settings.members_file).values()})
+        return login_page(request)
+
+    @app.post("/login/code", response_class=HTMLResponse)
+    def login_send_code(request: Request, email: str = Form("")):
+        if settings.auth_mode != "code":
+            raise HTTPException(404)
+        email = email.strip().lower()
+        matches = members_for(settings.members_file, email)
+        member = matches[0] if matches else None
+        if not mailer.configured:
+            return login_page(request, error="Sign-in emails are not set up on this computer yet. "
+                                             "Ask the librarian.")
+        if member is None:
+            return login_page(request, email=email,
+                              error="That email is not on the library committee list.")
+        code = codes.issue(email)
+        if code is None:
+            return login_page(request, email=email, sent=True,
+                              error="A code was sent less than a minute ago. Check your inbox.")
+        try:
+            mailer.send(email, "Library app sign-in code",
+                        f"Hello {' / '.join(m['name'] for m in matches)},\n\nYour sign-in code for the library app is {code}.\n"
+                        f"It works once, for {LoginCodes.LIFETIME // 60} minutes.\n\n"
+                        "If you did not ask for it, you can ignore this email.\n\nSchool Library")
+        except (OSError, smtplib.SMTPException):
+            codes.discard(email)
+            return login_page(request, email=email,
+                              error="The email could not be sent. Try again, or ask the librarian.")
+        return login_page(request, email=email, sent=True)
+
+    @app.post("/login/verify", response_class=HTMLResponse)
+    def login_verify(request: Request, email: str = Form(""), code: str = Form("")):
+        if settings.auth_mode != "code":
+            raise HTTPException(404)
+        email = email.strip().lower()
+        matches = members_for(settings.members_file, email)
+        if not matches or not codes.check(email, code):
+            return login_page(request, email=email, sent=True,
+                              error="That code is wrong or has expired. Check it, or ask for a new one.")
+        if len(matches) == 1:
+            request.session["user"] = matches[0]
+            return RedirectResponse("/", 303)
+        # A shared email: the code proves the inbox, then the person says who they are.
+        request.session["choose"] = {"email": email, "until": time.time() + CHOOSE_WITHIN}
+        return login_page(request, choose=matches)
+
+    @app.post("/login/choose")
+    def login_choose(request: Request, name: str = Form("")):
+        pending = request.session.pop("choose", None)
+        if settings.auth_mode != "code" or not pending or time.time() > pending["until"]:
+            return RedirectResponse("/login", 303)
+        member = next((m for m in members_for(settings.members_file, pending["email"])
+                       if m["name"] == name), None)
+        if member is None:
+            return RedirectResponse("/login", 303)
+        request.session["user"] = member
+        return RedirectResponse("/", 303)
 
     @app.post("/login")
-    def login(request: Request, email: str = Form(...)):
-        member = load_members(settings.members_file).get(email.strip().lower())
+    def login(request: Request, email: str = Form(""), member: str = Form("")):
+        # Picking a name is for local testing only.
+        if settings.auth_mode != "dev":
+            raise HTTPException(404)
+        everyone = member_list(settings.members_file)
+        if member.isdigit() and int(member) < len(everyone):
+            member = everyone[int(member)]
+        else:
+            member = load_members(settings.members_file).get(email.strip().lower())
         if member is None:
             raise HTTPException(403, "Not on the committee list.")
         request.session["user"] = member
@@ -108,16 +359,33 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
         request.session.clear()
         return RedirectResponse("/login", 303)
 
+    # ------------------------------------------------------------ scheduled job (Vercel cron)
+
+    @app.get("/cron/daily-job")
+    def cron_daily_job(request: Request, conn=Depends(get_conn)):
+        """Vercel calls this once a day. It needs CRON_SECRET, so nobody else can run it."""
+        sent = request.headers.get("authorization", "")
+        if not settings.cron_secret or not hmac.compare_digest(sent, f"Bearer {settings.cron_secret}"):
+            raise HTTPException(401, "Not allowed.")
+        from .. import jobs
+        return jobs.run_daily(conn, mailer)
+
     # ------------------------------------------------------------ desk (no AI needed)
 
     @app.get("/desk", response_class=HTMLResponse)
-    def desk_page(request: Request, q: str = "", user=Depends(current_user), conn=Depends(get_conn)):
+    def desk_page(request: Request, q: str = "", category: str = "",
+                  user=Depends(current_user), conn=Depends(get_conn)):
         books = students = None
+        if q.strip() or category:
+            books = register.find_books(conn, q, limit=DESK_BOOK_LIMIT + 1, category=category)
         if q.strip():
-            books = register.find_books(conn, q)
             students = [{"student_id": s["student_id"], "name": s["name"], "grade": s["grade"]}
                         for s in register.find_students(conn, q)]
-        return page(request, "desk.html", user, q=q, books=books, students=students,
+        more = books is not None and len(books) > DESK_BOOK_LIMIT
+        return page(request, "desk.html", user, q=q, category=category,
+                    categories=register.categories(conn),
+                    books=books[:DESK_BOOK_LIMIT] if more else books, more_books=more,
+                    students=students,
                     pending=len(approvals.list_pending(conn)), message=request.query_params.get("msg"))
 
     @app.post("/desk/{task}")

@@ -12,13 +12,17 @@
   shelf-check FILE.csv         export every book's status to tick off against the shelf
   report [--from D] [--to D]   proposals, rejections, corrections and approval wait times
                                (default: the last 30 days)
+  reset-password ["NAME"]      clear a member's forgotten password (AUTH_MODE=password);
+                               they create a new one at their next sign-in. With no
+                               name, clears every password, the shared one included
+                               (use this with SHARED_PASSWORD=yes)
 """
 import argparse
 import json
 from datetime import date, timedelta
 
 from . import backup as backups
-from . import importer, jobs, register, reports
+from . import importer, jobs, passwords, register, reports
 from .config import settings
 from .db import connect, describe, init_db
 from .notifications import Mailer
@@ -39,6 +43,7 @@ def main(argv=None):
     r = sub.add_parser("report")
     r.add_argument("--from", dest="start", type=date.fromisoformat)
     r.add_argument("--to", dest="end", type=date.fromisoformat)
+    sub.add_parser("reset-password").add_argument("name", nargs="?")
     s = sub.add_parser("serve")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8000)
@@ -79,6 +84,21 @@ def main(argv=None):
         end = args.end or date.today()
         start = args.start or end - timedelta(days=30)
         print(reports.format_report(reports.period_report(conn, start, end)))
+    elif args.cmd == "reset-password" and not args.name:
+        passwords.clear_all(conn)
+        print("All passwords cleared. The next person to sign in creates a new one.")
+    elif args.cmd == "reset-password":
+        from .web.app import member_list
+
+        found = [m for m in member_list(settings.members_file)
+                 if m["name"].lower() == args.name.strip().lower()]
+        if not found:
+            print(f'No member called "{args.name}" in {settings.members_file}')
+        for m in found:
+            if passwords.clear_password(conn, m):
+                print(f"Password cleared for {m['name']}. They will create a new one at their next sign-in.")
+            else:
+                print(f"{m['name']} has no password set yet.")
     conn.close()
 
 

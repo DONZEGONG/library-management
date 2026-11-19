@@ -11,3 +11,6 @@ settings.env
 *.partial
 Student Name*
 import/
+
+# Vercel
+.vercel/

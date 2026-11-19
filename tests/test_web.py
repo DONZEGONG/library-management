@@ -128,3 +128,13 @@ def test_desk_errors_and_lookup(desk):
     r = desk.post("/desk/refer", data={"notes": "Fine question for Asha", "student": "S-001"})
     assert "Referred to the librarian" in r.text
     assert desk.post("/desk/delete", data={"book_id": "B-101"}).status_code == 404
+
+
+def test_desk_search_by_category(desk):
+    r = desk.get("/desk", params={"category": "Biography"})
+    assert "Wings of Fire" in r.text and "Charlotte" not in r.text
+    assert "<option selected>Biography</option>" in r.text
+    assert "Students" not in r.text.split("Books")[1]  # a category-only lookup skips students
+    r = desk.get("/desk", params={"q": "stories"})
+    assert "Charlotte" in r.text and "Wings of Fire" not in r.text
+    assert "Stories" in desk.get("/register").text

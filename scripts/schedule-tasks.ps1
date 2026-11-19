@@ -44,10 +44,11 @@ New-Item -ItemType Directory -Force $logDir | Out-Null
 
 # Each task runs a small cmd line so environment settings and a log file come along.
 function New-Command([string]$command, [string]$log) {
-    $sets = @("set BACKUP_DIR=$BackupDir")
+    # Quoted as set "NAME=value": unquoted, cmd keeps the space before && in the value.
+    $sets = @("set `"BACKUP_DIR=$BackupDir`"")
     if ($EnvFile) {
         foreach ($line in Get-Content $EnvFile) {
-            if ($line -match '^\s*([A-Z_][A-Z0-9_]*)=(.*)$') { $sets += "set $($Matches[1])=$($Matches[2])" }
+            if ($line -match '^\s*([A-Z_][A-Z0-9_]*)=(.*)$') { $sets += "set `"$($Matches[1])=$($Matches[2].Trim())`"" }
         }
     }
     $body = ($sets -join " && ") + " && `"$python`" -m library_agent $command >> `"$logDir\$log`" 2>&1"

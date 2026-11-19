@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS books (
     book_id         TEXT PRIMARY KEY,
     name            TEXT NOT NULL,
     author          TEXT NOT NULL DEFAULT '',
+    category        TEXT NOT NULL DEFAULT '',
     copy_number     INTEGER NOT NULL DEFAULT 1,
     status          TEXT NOT NULL DEFAULT 'Available',
     condition_notes TEXT NOT NULL DEFAULT '',
@@ -141,6 +142,21 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     messages   TEXT NOT NULL DEFAULT '[]',
     updated_at TEXT NOT NULL
 );
+
+-- Committee sign-in passwords (AUTH_MODE=password). Only a salted hash is kept,
+-- never the password itself.
+-- Wrong-password counts, so the sign-in lock works across several servers.
+CREATE TABLE IF NOT EXISTS login_attempts (
+    attempt_key TEXT PRIMARY KEY,
+    fails       INTEGER NOT NULL,
+    since       REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS member_passwords (
+    member_key    TEXT PRIMARY KEY,
+    password_hash TEXT NOT NULL,
+    set_at        TEXT NOT NULL
+);
 """
 
 # Same tables for PostgreSQL. Dates stay as ISO text so every query and
@@ -166,7 +182,8 @@ FOR EACH ROW EXECUTE FUNCTION correction_log_locked();
 # Tables in the order they must be filled (foreign keys), and each table's
 # auto-numbered column. Used by backup, restore and the move to PostgreSQL.
 TABLES = ("books", "students", "loans", "reservations", "fines", "pending_actions",
-          "human_decisions", "correction_log", "notifications", "tool_calls", "chat_sessions")
+          "human_decisions", "correction_log", "notifications", "tool_calls", "chat_sessions",
+          "member_passwords")
 AUTO_IDS = {"loans": "loan_id", "reservations": "reservation_id", "fines": "fine_id",
             "pending_actions": "action_id", "human_decisions": "decision_id",
             "correction_log": "correction_id", "notifications": "notification_id",
@@ -287,7 +304,26 @@ def connect(target: str | None = None):
 
 def init_db(conn) -> None:
     conn.executescript(POSTGRES_SCHEMA if conn.dialect == "postgres" else SQLITE_SCHEMA)
+    _add_missing_columns(conn)
     conn.commit()
+
+
+# Columns added after the first release. CREATE TABLE IF NOT EXISTS leaves an
+# existing table alone, so older databases get these added here.
+NEW_COLUMNS = {
+    "books": {"category": "TEXT NOT NULL DEFAULT ''"},
+}
+
+
+def _add_missing_columns(conn) -> None:
+    for table, columns in NEW_COLUMNS.items():
+        for name, ddl in columns.items():
+            if conn.dialect == "postgres":
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {name} {ddl}")
+                continue
+            have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+            if name not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
 
 
 def is_empty(conn) -> bool:
