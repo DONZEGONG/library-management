@@ -122,29 +122,70 @@ def suggestions(n: int = 3) -> list[str]:
 
 class Attempts:
     """Slows down guessing: after MAX_TRIES wrong passwords a member must wait.
-    Kept in memory only (a restart clears it)."""
+
+    With `connect` (a function that opens the database) the counts are kept in
+    the login_attempts table, so they hold when the app runs on several servers
+    at once (as on Vercel). Without it they are kept in memory only."""
     MAX_TRIES = 5
     WAIT = 5 * 60  # seconds
 
-    def __init__(self, clock=time.monotonic):
+    def __init__(self, clock=time.time, connect=None):
         self.clock = clock
+        self.connect = connect
         self._fails: dict[str, dict] = {}
 
+    # -- storage
+    def _get(self, key):
+        if self.connect is None:
+            return self._fails.get(key)
+        conn = self.connect()
+        try:
+            row = conn.execute("SELECT fails, since FROM login_attempts WHERE attempt_key = ?",
+                               (key,)).fetchone()
+        finally:
+            conn.close()
+        return {"count": row["fails"], "since": row["since"]} if row else None
+
+    def _put(self, key, count, since):
+        if self.connect is None:
+            self._fails[key] = {"count": count, "since": since}
+            return
+        conn = self.connect()
+        try:
+            conn.execute("INSERT INTO login_attempts (attempt_key, fails, since) VALUES (?, ?, ?) "
+                         "ON CONFLICT(attempt_key) DO UPDATE SET fails = excluded.fails, "
+                         "since = excluded.since", (key, count, since))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _drop(self, key):
+        if self.connect is None:
+            self._fails.pop(key, None)
+            return
+        conn = self.connect()
+        try:
+            conn.execute("DELETE FROM login_attempts WHERE attempt_key = ?", (key,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    # -- rules
     def locked(self, key: str) -> int:
         """Seconds left to wait, or 0."""
-        entry = self._fails.get(key)
+        entry = self._get(key)
         if not entry or entry["count"] < self.MAX_TRIES:
             return 0
         left = self.WAIT - (self.clock() - entry["since"])
         if left <= 0:
-            self._fails.pop(key, None)
+            self._drop(key)
             return 0
         return int(left) + 1
 
     def failed(self, key: str) -> None:
-        entry = self._fails.setdefault(key, {"count": 0, "since": self.clock()})
-        entry["count"] += 1
-        entry["since"] = self.clock()
+        entry = self._get(key)
+        self._put(key, (entry["count"] if entry else 0) + 1, self.clock())
 
     def succeeded(self, key: str) -> None:
-        self._fails.pop(key, None)
+        if self._get(key):
+            self._drop(key)

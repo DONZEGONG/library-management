@@ -47,10 +47,9 @@ def test_period_report_excludes_other_dates(ctx, conn):
     assert "none" in reports.format_report(r)
 
 
-def test_cli_report_and_shelf_check(conn, tmp_path, monkeypatch, capsys):
+def test_cli_report_and_shelf_check(conn, db_target, tmp_path, monkeypatch, capsys):
     from library_agent import config
-    db = conn.execute("PRAGMA database_list").fetchone()["file"]
-    monkeypatch.setattr(config.settings, "db_path", db)
+    monkeypatch.setattr(config.settings, "db_path", db_target)
     main(["report"])
     assert "Library agent report" in capsys.readouterr().out
     main(["shelf-check", str(tmp_path / "s.csv")])

@@ -41,7 +41,7 @@ def find_books(conn, query: str, limit: int = 20, category: str = "") -> list[di
            " WHERE deleted_at IS NULL")
     params: list = []
     if q:
-        sql += " AND (book_id = ? OR name LIKE ? OR author LIKE ? OR category LIKE ?)"
+        sql += " AND (book_id = ? OR LOWER(name) LIKE LOWER(?) OR LOWER(author) LIKE LOWER(?) OR LOWER(category) LIKE LOWER(?))"
         params += [q, like, like, like]
     if category:
         sql += " AND category = ?"
@@ -59,7 +59,7 @@ def categories(conn) -> list[str]:
 def find_students(conn, query: str, limit: int = 10) -> list:
     like = f"%{query.strip()}%"
     return conn.execute(
-        "SELECT * FROM students WHERE deleted_at IS NULL AND (student_id = ? OR name LIKE ?)"
+        "SELECT * FROM students WHERE deleted_at IS NULL AND (student_id = ? OR LOWER(name) LIKE LOWER(?))"
         " ORDER BY name LIMIT ?",
         (query.strip(), like, limit),
     ).fetchall()

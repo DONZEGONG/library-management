@@ -1,3 +1,4 @@
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -17,9 +18,27 @@ FRIDAY = date(2026, 10, 30)
 MONDAY = date(2026, 11, 2)
 
 
+# Tests use a fresh SQLite file each time. Set TEST_DATABASE_URL to a
+# throwaway PostgreSQL database to run them all against PostgreSQL instead
+# (every table in it is dropped before each test).
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
+
+
 @pytest.fixture
-def conn(tmp_path):
-    c = connect(str(tmp_path / "test.db"))
+def db_target(tmp_path):
+    if not TEST_DATABASE_URL:
+        return str(tmp_path / "test.db")
+    c = connect(TEST_DATABASE_URL)
+    c.execute("DROP SCHEMA public CASCADE")
+    c.execute("CREATE SCHEMA public")
+    c.commit()
+    c.close()
+    return TEST_DATABASE_URL
+
+
+@pytest.fixture
+def conn(db_target):
+    c = connect(db_target)
     init_db(c)
     importer.import_books(c, str(ROOT / "sample_data" / "books.csv"))
     importer.import_students(c, str(ROOT / "sample_data" / "students.csv"))

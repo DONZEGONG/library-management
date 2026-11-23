@@ -34,13 +34,15 @@ def set_fine(conn: sqlite3.Connection, loan_id: int, amount: float, reason: str,
     if loan is None:
         raise LibrarianError(f"No loan #{loan_id}.")
     cur = conn.execute(
-        "INSERT INTO fines (loan_id, reason, amount, set_by, created_at) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO fines (loan_id, reason, amount, set_by, created_at) VALUES (?, ?, ?, ?, ?)"
+        " RETURNING fine_id",
         (loan_id, reason, amount, librarian, now()),
     )
+    fine_id = cur.fetchone()[0]
     if send_payup and mailer is not None:
         notifications.send_payup(conn, mailer, loan_id)
     conn.commit()
-    return cur.lastrowid
+    return fine_id
 
 
 def update_fine(conn, fine_id: int, status: str, reason: str, librarian: str,
@@ -138,6 +140,11 @@ def delete_record(conn, table: str, record_id, reason: str, librarian: str) -> N
     keys = {"books": "book_id", "students": "student_id", "loans": "loan_id"}
     if table not in keys:
         raise LibrarianError("Only books, students and loans can be deleted.")
+    if table == "loans":
+        try:
+            record_id = int(record_id)
+        except ValueError:
+            raise LibrarianError(f"Loan ID must be a number, not {record_id}.") from None
     cur = conn.execute(
         f"UPDATE {table} SET deleted_at = ?, deleted_by = ?, delete_reason = ?"
         f" WHERE {keys[table]} = ? AND deleted_at IS NULL",

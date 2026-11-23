@@ -1,0 +1,13 @@
+"""Vercel entry point: Vercel runs the FastAPI app named `app` in this file.
+
+Settings come from Vercel's Environment Variables (DATABASE_URL, SESSION_SECRET,
+AUTH_MODE, SHARED_PASSWORD, MEMBERS_CSV, CRON_SECRET and so on).
+"""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from library_agent.web.app import create_app  # noqa: E402
+
+app = create_app()

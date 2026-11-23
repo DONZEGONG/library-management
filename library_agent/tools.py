@@ -78,16 +78,17 @@ def _ensure_no_pending(conn, book_id: str):
 def propose(ctx: ToolContext, tool: str, details: dict, reason: str, flags: list[str] | None = None) -> dict:
     cur = ctx.conn.execute(
         "INSERT INTO pending_actions (tool, details, suggested_by, reason, flags, session_id, created_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        " VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING action_id",
         (tool, json.dumps(details), ctx.suggested_by, reason,
          json.dumps(flags or []), ctx.session_id, now()),
     )
+    action_id = cur.fetchone()[0]
     ctx.conn.commit()
     return {
-        "pending_action_id": cur.lastrowid,
+        "pending_action_id": action_id,
         "status": "waiting_for_approval",
         "flags_for_human": flags or [],
-        "message": f"Action #{cur.lastrowid} is waiting for a committee member to approve it. "
+        "message": f"Action #{action_id} is waiting for a committee member to approve it. "
                    "Nothing has been saved yet.",
     }
 

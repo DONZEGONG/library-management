@@ -1,0 +1,25 @@
+# Never upload these to Vercel: real data, secrets and local-only files.
+# The app reads its data from DATABASE_URL and members from MEMBERS_CSV instead.
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+*.partial
+backups/
+logs/
+import/
+members.csv
+.env
+settings.env
+Student Name*
+*.csv
+!sample_data/*.csv
+Shelf check.html
+shelf*.csv
+shelf*.html
+tests/
+scripts/
+session-notes/
+.env*
+.vercel/

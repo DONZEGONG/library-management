@@ -2,6 +2,7 @@
 import csv
 import hashlib
 import hmac
+import io
 import json
 import secrets
 import smtplib
@@ -34,13 +35,17 @@ def member_list(path: str) -> list[dict]:
     """members.csv: name,email,role (role is committee or librarian).
     With AUTH_MODE=password each member's password hash is kept in the database
     (see passwords.py); other modes keep no passwords. Several members may share one email; they choose their name after signing in."""
-    p = Path(path)
-    if not p.exists():
-        return []
-    with p.open(newline="", encoding="utf-8-sig") as f:
-        return [{"name": r["name"].strip(), "email": r["email"].strip().lower(),
-                 "role": (r.get("role") or "committee").strip()}
-                for r in csv.DictReader(f) if r.get("email") and (r.get("name") or "").strip()]
+    if settings.members_csv.strip():
+        # A single-line setting may write line breaks as \n.
+        text = settings.members_csv.replace("\\n", "\n").lstrip("﻿")
+    else:
+        p = Path(path)
+        if not p.exists():
+            return []
+        text = p.read_text(encoding="utf-8-sig")
+    return [{"name": r["name"].strip(), "email": r["email"].strip().lower(),
+             "role": (r.get("role") or "committee").strip()}
+            for r in csv.DictReader(io.StringIO(text)) if r.get("email") and (r.get("name") or "").strip()]
 
 
 def load_members(path: str) -> dict[str, dict]:
@@ -157,7 +162,7 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
 
     codes = LoginCodes()
 
-    attempts = passwords.Attempts()
+    attempts = passwords.Attempts(connect=lambda: connect(db_path))
 
     def login_page(request, **ctx):
         members = member_list(settings.members_file)
@@ -353,6 +358,17 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
     def logout(request: Request):
         request.session.clear()
         return RedirectResponse("/login", 303)
+
+    # ------------------------------------------------------------ scheduled job (Vercel cron)
+
+    @app.get("/cron/daily-job")
+    def cron_daily_job(request: Request, conn=Depends(get_conn)):
+        """Vercel calls this once a day. It needs CRON_SECRET, so nobody else can run it."""
+        sent = request.headers.get("authorization", "")
+        if not settings.cron_secret or not hmac.compare_digest(sent, f"Bearer {settings.cron_secret}"):
+            raise HTTPException(401, "Not allowed.")
+        from .. import jobs
+        return jobs.run_daily(conn, mailer)
 
     # ------------------------------------------------------------ desk (no AI needed)
 

@@ -105,10 +105,10 @@ def draft_payup(conn, loan_id: int, notes: str) -> int:
     body = f"(Draft) Damage notes: {notes}. Waiting for the librarian to set the amount."
     cur = conn.execute(
         "INSERT INTO notifications (kind, recipient, subject, body, loan_id, status, created_at)"
-        " VALUES ('payup', ?, ?, ?, ?, 'draft', ?)",
+        " VALUES ('payup', ?, ?, ?, ?, 'draft', ?) RETURNING notification_id",
         (row["contact_email"], subject, body, loan_id, now()),
     )
-    return cur.lastrowid
+    return cur.fetchone()[0]
 
 
 class PayupNotAllowed(Exception):

@@ -7,3 +7,13 @@ backups/
 logs/
 members.csv
 .env
+settings.env
+*.partial
+Student Name*
+import/
+
+# Vercel
+.vercel/
+
+.vercel
+.env*
