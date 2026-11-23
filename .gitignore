@@ -14,3 +14,6 @@ import/
 
 # Vercel
 .vercel/
+
+.vercel
+.env*

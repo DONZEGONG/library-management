@@ -21,3 +21,5 @@ shelf*.html
 tests/
 scripts/
 session-notes/
+.env*
+.vercel/
