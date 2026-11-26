@@ -58,7 +58,10 @@
   {% if ai_enabled %}<a href="/">Chat</a>{% endif %}
   <a href="/approvals">Approvals</a>
   <a href="/register">Register</a>
-  {% if user.role == 'librarian' %}<a href="/librarian">Librarian tools</a>{% endif %}
+  {% if user.role == 'librarian' %}<a href="/books/add">Add books</a>
+  <a href="/students">Students</a>
+  <a href="/librarian">Librarian tools</a>
+  <a href="/activity">Activity log</a>{% endif %}
   <a href="/corrections">Correction log</a>
   <span class="who">{{ user.name }} ({{ user.role }}) ·
     {% if auth_mode == 'password' %}<a href="/account/password">change password</a> · {% endif %}<a href="/logout">sign out</a></span>

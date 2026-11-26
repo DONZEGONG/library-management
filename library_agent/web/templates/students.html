@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Students{% endblock %}
+{% block head %}
+<style>
+  .st-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:.6rem 1rem; }
+  .st-grid label { display:flex; flex-direction:column; font-size:.9rem; font-weight:600; gap:.2rem; }
+  .st-grid input { font-weight:400; }
+  .pill { display:inline-block; padding:.05rem .55rem; border-radius:99px; font-size:.8rem; }
+  .pill.Active { background:#e3f4e8; color:#1b5e20; }
+  .pill.Inactive { background:#eceff3; color:#5b6475; }
+  td form { display:inline; }
+  .table-wrap { overflow-x:auto; }
+  details > summary { cursor:pointer; font-weight:600; }
+</style>
+{% endblock %}
+{% block content %}
+<h1>Students</h1>
+{% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+
+<div class="card">
+  <form method="get" action="/students" class="row" role="search">
+    <label class="visually-hidden" for="q">Student ID or name</label>
+    <input id="q" name="q" value="{{ q }}" placeholder="Search by student ID or name" style="flex:1 1 16rem">
+    <label class="visually-hidden" for="show">Show</label>
+    <select id="show" name="show">
+      {% for s in ['Active', 'Inactive', 'All'] %}<option value="{{ s }}" {% if s == show %}selected{% endif %}>{{ s }}{% if s != 'All' %} students{% endif %}</option>{% endfor %}
+    </select>
+    <button>Search</button>
+  </form>
+</div>
+
+<div class="table-wrap">
+<table>
+  <tr><th>Student ID</th><th>Name</th><th>Class</th><th>Section</th><th>Phone</th><th>Email</th><th>Status</th><th></th></tr>
+  {% for s in students %}
+  <tr>
+    <td>{{ s.student_id }}</td><td>{{ s.name }}</td><td>{{ s.grade }}</td><td>{{ s.section }}</td>
+    <td>{{ s.phone }}</td><td>{{ s.contact_email }}</td>
+    <td><span class="pill {{ s.status }}">{{ s.status }}</span>{% if s.removed_at %}<br><span class="muted">since {{ s.removed_at[:10] }}</span>{% endif %}</td>
+    <td>{% if s.status == 'Inactive' %}
+      <form method="post" action="/students/{{ s.student_id | urlencode }}/restore"><button class="secondary">Restore</button></form>
+      {% else %}<a href="/students/{{ s.student_id | urlencode }}/remove">Remove</a>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="8" class="muted">No {{ '' if show == 'All' else show | lower }} students{% if q %} match &ldquo;{{ q }}&rdquo;{% endif %}.</td></tr>
+  {% endfor %}
+</table>
+</div>
+<p class="muted">{{ students | length }} shown.</p>
+
+<div class="card" id="add">
+  <h2 class="sub">Add a student</h2>
+  <form method="post" action="/students/add">
+    <div class="st-grid">
+      <label>Student ID *<input name="student_id" required value="{{ form.student_id or '' }}" autocomplete="off"></label>
+      <label>Full name *<input name="name" required value="{{ form.name or '' }}" autocomplete="off"></label>
+      <label>Class/Grade<input name="grade" value="{{ form.grade or '' }}"></label>
+      <label>Section<input name="section" value="{{ form.section or '' }}"></label>
+      <label>Phone<input name="phone" type="tel" value="{{ form.phone or '' }}"></label>
+      <label>Email<input name="email" type="email" value="{{ form.email or '' }}"></label>
+      <label>Photo link (optional)<input name="photo_url" type="url" placeholder="https://" value="{{ form.photo_url or '' }}"></label>
+    </div>
+    <p><button>Add student</button> <span class="muted">New students start as Active. * required</span></p>
+  </form>
+</div>
+
+<div class="card" id="bulk">
+  <h2 class="sub">Add many students from a file</h2>
+  <p class="muted">CSV or Excel (.xlsx), up to 1,000 rows. Columns: Student ID, Full name, Class/Grade, Section, Phone, Email, Photo.
+    You choose which column is which next, then check a preview before anything is saved.</p>
+  <form method="post" action="/students/upload" enctype="multipart/form-data" class="row">
+    <label class="visually-hidden" for="sfile">File</label>
+    <input id="sfile" type="file" name="file" accept=".csv,.xlsx,.xlsm,text/csv" required>
+    <button>Upload and preview</button>
+  </form>
+</div>
+{% endblock %}

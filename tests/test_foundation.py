@@ -45,7 +45,9 @@ def test_db_created_from_scratch(db_target):
 
 def test_students_table_has_no_password_column(conn):
     cols = {d[0] for d in conn.execute("SELECT * FROM students LIMIT 0").description}
-    assert cols == {"student_id", "name", "grade", "contact_email", "deleted_at", "deleted_by", "delete_reason"}
+    # MINI SPEC 4 added section, phone, photo_url, status, created_at and removed_at.
+    assert cols == {"student_id", "name", "grade", "contact_email", "deleted_at", "deleted_by", "delete_reason",
+                    "section", "phone", "photo_url", "status", "created_at", "removed_at"}
 
 
 # ---------------------------------------------------------------- Phase 2

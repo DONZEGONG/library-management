@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Activity log{% endblock %}
+{% block content %}
+<h1>Activity log</h1>
+<p class="muted">Every bulk add, copy-count change, and student added, removed or restored. Newest first.</p>
+<form method="get" action="/activity" class="row card">
+  <label for="action">Show</label>
+  <select id="action" name="action" onchange="this.form.submit()">
+    <option value="">Everything</option>
+    {% for a in actions %}<option value="{{ a }}" {% if a == action %}selected{% endif %}>{{ a }}</option>{% endfor %}
+  </select>
+  <noscript><button>Show</button></noscript>
+</form>
+<div style="overflow-x:auto">
+<table>
+  <tr><th>When (UTC)</th><th>Who</th><th>Action</th><th>How</th><th>Details</th></tr>
+  {% for r in rows %}
+  <tr><td>{{ r.created_at[:16] | replace('T', ' ') }}</td><td>{{ r.user_name }}</td><td>{{ r.action }}</td>
+      <td>{{ r.source }}</td><td>{{ r.details }}</td></tr>
+  {% else %}
+  <tr><td colspan="5" class="muted">Nothing recorded yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

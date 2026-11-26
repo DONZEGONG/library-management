@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Match columns{% endblock %}
+{% block content %}
+<h1>Match the columns</h1>
+<p>From <b>{{ filename }}</b>: {{ parsed.rows | length }} row(s). Check which column in your file holds each detail.
+  Student ID and Full name are needed.</p>
+<form method="post" action="/students/upload/preview" class="card">
+  <input type="hidden" name="rows" value="{{ rows_json }}">
+  <div class="stack">
+  {% for f in fields %}
+    <label for="col_{{ f }}">{{ labels[f] }}{% if f in ('student_id', 'name') %} *{% endif %}</label>
+    <select id="col_{{ f }}" name="col_{{ f }}" {% if f in ('student_id', 'name') %}required{% endif %}>
+      <option value="">(not in this file)</option>
+      {% for h in parsed.headers %}<option value="{{ loop.index0 }}" {% if parsed.guess[f] == loop.index0 %}selected{% endif %}>{{ h }}{% if parsed.rows %} (e.g. {{ parsed.rows[0][loop.index0][:30] }}){% endif %}</option>{% endfor %}
+    </select>
+  {% endfor %}
+  </div>
+  <p class="row"><button>Show preview</button> <a href="/students#bulk">Cancel</a></p>
+</form>
+{% endblock %}

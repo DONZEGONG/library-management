@@ -1,0 +1,634 @@
+{% extends "base.html" %}
+{% block title %}Add books{% endblock %}
+{% block head %}
+<style>
+  main:has(#ab) { max-width:1280px; }
+  .tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.8rem; }
+  .tabs button { background:#fff; color:var(--ink); border-color:var(--line); }
+  .tabs button[aria-selected="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .panel[hidden] { display:none; }
+  .map { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:.5rem 1rem; margin:.6rem 0; }
+  .map label { display:flex; flex-direction:column; font-size:.9rem; font-weight:600; gap:.2rem; }
+  .scan-in { font-size:1.3rem; width:100%; max-width:28rem; }
+  .voice-btn { font-size:1.1rem; padding:.7rem 1.2rem; }
+  .voice-btn.on { background:var(--red); border-color:var(--red); }
+  .talk { max-height:260px; overflow-y:auto; background:#f7f9fc; border:1px solid var(--line); border-radius:8px; padding:.5rem .8rem; margin:.6rem 0; font-size:.95rem; }
+  .talk p { margin:.2rem 0; } .talk .ai b { color:var(--accent); } .talk .me b { color:#6a4c00; }
+  .counts { display:flex; gap:1rem; flex-wrap:wrap; font-weight:600; margin:.4rem 0; }
+  .notice { background:#fff8e1; border:1px solid #e0b100; border-radius:8px; padding:.5rem .8rem; margin:.4rem 0; font-size:.95rem; }
+  .table-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:8px; }
+  #preview td { padding:.3rem .35rem; }
+  #preview input { width:100%; min-width:5rem; padding:.3rem .4rem; }
+  #preview input.num { min-width:3.5rem; max-width:5rem; }
+  #preview tr.st-error { background:#fdf1f1; } #preview tr.st-exists { background:#fffbea; } #preview tr.st-skip { opacity:.55; }
+  .st { white-space:nowrap; font-weight:600; font-size:.9rem; }
+  .ask { min-width:15rem; font-size:.9rem; }
+  .ask select { margin:.2rem 0; }
+  .cover { width:28px; height:40px; object-fit:cover; border-radius:3px; vertical-align:middle; margin-right:.3rem; }
+  .x { background:none; border:0; color:var(--muted); padding:.2rem .4rem; }
+  .bar { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin:.8rem 0; }
+  .result { background:#e3f4e8; border:1px solid #2e7d32; border-radius:8px; padding:.8rem 1rem; font-size:1.1rem; margin:.6rem 0; }
+  .err { color:var(--red); font-weight:600; }
+</style>
+{% endblock %}
+{% block content %}
+<div id="ab">
+<h1>Add books</h1>
+<p class="muted">Add many books at once. Every method fills the same list below. Nothing is saved until you press <b>Confirm</b>
+  (or say &ldquo;Yes&rdquo; in voice mode). Books already in the library are flagged and you are asked how many copies there are now.</p>
+
+<div class="tabs" role="tablist">
+  <button role="tab" data-tab="file" aria-selected="true">Upload a file</button>
+  <button role="tab" data-tab="scan" aria-selected="false">Scan barcodes</button>
+  <button role="tab" data-tab="voice" aria-selected="false">&#x1F3A4; Voice Add</button>
+  <button role="tab" data-tab="manual" aria-selected="false">Type a book</button>
+</div>
+
+<section class="card panel" id="tab-file">
+  <h2 class="sub">Upload a CSV or Excel file</h2>
+  <p class="muted">Columns: ISBN, Title, Author, Publisher, Year, Category, Copies. Title and Author are needed; an empty Copies means 1. Up to {{ '{:,}'.format(max_rows) }} rows.</p>
+  <input type="file" id="file" accept=".csv,.xlsx,.xlsm,text/csv">
+  <div id="mapping" hidden>
+    <p id="map-note" class="muted"></p>
+    <div class="map" id="map"></div>
+    <button id="map-go">Add to the list</button>
+  </div>
+  <p id="file-msg" role="status"></p>
+</section>
+
+<section class="card panel" id="tab-scan" hidden>
+  <h2 class="sub">Scan books one after another</h2>
+  <p class="muted">Click in the box and scan each barcode (or type the ISBN and press Enter). Details are looked up online when possible.
+    Scanning the same book again adds a copy.</p>
+  <label for="scan" class="visually-hidden">ISBN</label>
+  <input id="scan" class="scan-in" inputmode="numeric" autocomplete="off" placeholder="Scan or type ISBN, then Enter">
+  <p id="scan-msg" role="status"></p>
+</section>
+
+<section class="card panel" id="tab-voice" hidden>
+  <h2 class="sub">&#x1F3A4; Voice Add</h2>
+  <p class="muted">Say each book as <i>&ldquo;Wings of Fire by Abdul Kalam, 3 copies&rdquo;</i>. Commands: <b>Next</b>, <b>Undo last</b>,
+    <b>Remove</b> <i>title</i>, <b>Read the list</b>, <b>No, change copies to 4</b>, <b>Save</b> (or Done), <b>Cancel</b>.
+    English only for now. Works in Chrome or Edge; allow the microphone when asked.</p>
+  <div class="row">
+    <button id="voice-btn" class="voice-btn">Start listening</button>
+    <span id="voice-state" class="muted" role="status"></span>
+  </div>
+  <div class="talk" id="talk" aria-live="polite"><p class="muted">The conversation appears here.</p></div>
+  <form id="say-form" class="row">
+    <label for="say" class="visually-hidden">Type instead of speaking</label>
+    <input id="say" style="flex:1 1 20rem" autocomplete="off" placeholder="No microphone? Type what you would say, then Enter">
+    <button class="secondary">Send</button>
+  </form>
+</section>
+
+<section class="card panel" id="tab-manual" hidden>
+  <h2 class="sub">Type books in</h2>
+  <p class="muted">Adds an empty row to the list below; fill it in there.</p>
+  <button id="add-row">+ Add a row</button>
+</section>
+
+<section aria-labelledby="pv">
+  <h2 class="sub" id="pv">Preview</h2>
+  <div id="notices"></div>
+  <div class="counts" id="counts"></div>
+  <div class="table-wrap">
+  <table id="preview">
+    <thead><tr><th>Status</th><th>Title *</th><th>Author *</th><th>ISBN</th><th>Publisher</th><th>Year</th><th>Category</th><th>Copies</th><th>Copies in the library</th><th></th></tr></thead>
+    <tbody id="rows"><tr><td colspan="10" class="muted">The list is empty. Upload a file, scan, speak or type books in.</td></tr></tbody>
+  </table>
+  </div>
+  <div class="bar">
+    <button id="confirm" disabled>Confirm and save</button>
+    <button id="clear" class="secondary">Clear the list</button>
+    <span id="bar-msg" role="status"></span>
+  </div>
+  <div id="result"></div>
+</section>
+<datalist id="cats">{% for c in categories %}<option value="{{ c }}">{% endfor %}</datalist>
+</div>
+
+<script>
+(() => {
+"use strict";
+const MAX = {{ max_rows }};
+const FIELDS = ["isbn", "title", "author", "publisher", "year", "category", "copies"];
+const LABELS = {isbn: "ISBN", title: "Title", author: "Author", publisher: "Publisher", year: "Year", category: "Category", copies: "Copies"};
+const DRAFT = "libramind.addbooks.draft";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+};
+
+// ------------------------------------------------------------ state
+let rows = [];          // {id, source, title, author, isbn, publisher, year, category, copies, decision, skip, ...status}
+let notices = [];
+let ready = false;
+let nextId = 1;
+const looking = new Set();
+const newId = () => "r" + Date.now().toString(36) + (nextId++);
+
+function blank(source, data = {}) {
+  return {id: newId(), source, title: "", author: "", isbn: "", publisher: "", year: "", category: "", copies: "1",
+          decision: {mode: "", value: ""}, skip: false, status: "", message: "", ...data};
+}
+const plain = (r) => ({id: r.id, source: r.source, title: r.title, author: r.author, isbn: r.isbn, publisher: r.publisher,
+                       year: r.year, category: r.category, copies: r.copies, decision: r.decision, skip: r.skip});
+const saveDraft = () => rows.length ? store.set(DRAFT, rows.map(plain)) : store.del(DRAFT);
+
+// ------------------------------------------------------------ checking against the catalogue
+let seq = 0, timer = null;
+async function check() {
+  clearTimeout(timer);
+  const mine = ++seq;
+  saveDraft();
+  if (!rows.length) { notices = []; ready = false; render(); return; }
+  try {
+    const r = await fetch("/api/books/check", {method: "POST", headers: {"Content-Type": "application/json"},
+                                               body: JSON.stringify({rows: rows.map(plain)})});
+    const data = await r.json();
+    if (mine !== seq) return;            // a newer check is on its way
+    if (!r.ok) { $("bar-msg").innerHTML = `<span class="err">${esc(data.error || "Could not check the list.")}</span>`; return; }
+    rows = data.rows.map(x => ({...x, isbn: x.isbn_raw || x.isbn}));
+    notices = data.notices; ready = data.ready;
+    saveDraft();
+    render();
+  } catch (e) {
+    if (mine === seq) $("bar-msg").innerHTML = '<span class="err">No connection to the app. Your list is kept on this computer as a draft.</span>';
+  }
+}
+const checkSoon = () => { clearTimeout(timer); saveDraft(); timer = setTimeout(check, 350); };
+
+// ------------------------------------------------------------ the preview table
+const STATUS = {new: "\u{1F7E2} New", exists: "\u{1F7E1} Already exists", error: "\u{1F534} Error", skip: "Skipped"};
+
+function cell(r, f, cls = "") {
+  const list = f === "category" ? ' list="cats"' : "";
+  return `<input class="${cls}" data-id="${r.id}" data-f="${f}" value="${esc(r[f])}"${list} aria-label="${LABELS[f]}">`;
+}
+
+function askCell(r) {
+  if (r.status === "error" || r.status === "skip") return `<span class="${r.status === "error" ? "err" : "muted"}">${esc(r.message)}</span>`;
+  const m = r.match;
+  if (!m) return `<span class="muted">${esc(r.message)}</span>`;
+  const d = r.decision || {mode: "", value: ""};
+  const opt = (v, t) => `<option value="${v}" ${d.mode === v ? "selected" : ""}>${t}</option>`;
+  const showNum = d.mode === "set" || d.mode === "add";
+  return `<div class="ask">
+    <div>In the library: <b>${m.total}</b> ${m.total === 1 ? "copy" : "copies"} (${m.available} on the shelf${m.issued ? `, ${m.issued} issued` : ""}) &middot; ${esc(m.book_id)}</div>
+    <select data-id="${r.id}" data-d="mode" aria-label="What to do with this book">
+      ${opt("", "Choose...")}${opt("set", "Total copies now")}${opt("add", "Add more copies")}${opt("skip", "Skip (no change)")}${opt("new", "It's a different book")}
+    </select>
+    ${showNum ? `<input class="num" type="number" min="1" data-id="${r.id}" data-d="value" value="${esc(d.value)}" aria-label="Number of copies"
+       placeholder="${d.mode === "set" ? m.total : "2"}">` : ""}
+    ${r.message ? `<div class="${d.mode ? "err" : ""}">${esc(r.message)}</div>` : ""}
+  </div>`;
+}
+
+function render() {
+  const focus = document.activeElement;
+  const keep = focus && focus.dataset && focus.dataset.id ? {id: focus.dataset.id, f: focus.dataset.f, d: focus.dataset.d,
+               value: focus.value, start: focus.selectionStart} : null;
+  const body = $("rows");
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="10" class="muted">The list is empty. Upload a file, scan, speak or type books in.</td></tr>';
+  } else {
+    body.innerHTML = rows.map(r => {
+      const cover = /^\d{9}[\dX]$|^\d{13}$/.test(String(r.isbn).replace(/[^0-9X]/gi, ""))
+        ? `<img class="cover" loading="lazy" alt="" src="https://covers.openlibrary.org/b/isbn/${encodeURIComponent(String(r.isbn).replace(/[^0-9X]/gi, ""))}-S.jpg?default=false" onerror="this.remove()">` : "";
+      return `<tr class="st-${r.status || "new"}">
+        <td class="st">${looking.has(r.id) ? "Looking up..." : (STATUS[r.status] || "Checking...")}<br><span class="muted">${esc(r.source)}</span></td>
+        <td><div style="display:flex;align-items:center">${cover}${cell(r, "title")}</div></td>
+        <td>${cell(r, "author")}</td><td>${cell(r, "isbn")}</td><td>${cell(r, "publisher")}</td>
+        <td>${cell(r, "year", "num")}</td><td>${cell(r, "category")}</td><td>${cell(r, "copies", "num")}</td>
+        <td>${askCell(r)}</td>
+        <td><button class="x" data-skip="${r.id}" title="${r.skip ? "Include this row again" : "Skip this row"}">${r.skip ? "Undo skip" : "Skip"}</button>
+            <button class="x" data-del="${r.id}" title="Remove from the list" aria-label="Remove from the list">&#x2715;</button></td>
+      </tr>`;
+    }).join("");
+  }
+  if (keep) {
+    const sel = keep.d ? `[data-id="${keep.id}"][data-d="${keep.d}"]` : `[data-id="${keep.id}"][data-f="${keep.f}"]`;
+    const el = body.querySelector(sel);
+    if (el) { el.value = keep.value; el.focus(); try { el.setSelectionRange(keep.start, keep.start); } catch (e) {} }
+  }
+  const n = (s) => rows.filter(r => r.status === s).length;
+  $("counts").innerHTML = rows.length ? `<span>${rows.length} row${rows.length === 1 ? "" : "s"}</span><span>\u{1F7E2} ${n("new")} new</span>
+    <span>\u{1F7E1} ${n("exists")} already exist</span><span>\u{1F534} ${n("error")} errors</span><span>${n("skip")} skipped</span>` : "";
+  $("notices").innerHTML = notices.map(t => `<div class="notice">${esc(t)}</div>`).join("");
+  $("confirm").disabled = !ready || !rows.length;
+  $("bar-msg").textContent = rows.length && !ready ? "Fix or skip the rows marked Error, and answer the copy question for books that already exist." : "";
+}
+
+const rowById = (id) => rows.find(r => r.id === id);
+$("rows").addEventListener("change", (e) => {
+  const t = e.target, r = rowById(t.dataset.id);
+  if (!r) return;
+  if (t.dataset.f) r[t.dataset.f] = t.value;
+  if (t.dataset.d) { r.decision = {...(r.decision || {}), [t.dataset.d]: t.value}; render(); }
+  check();
+});
+$("rows").addEventListener("click", (e) => {
+  const del = e.target.dataset.del, skip = e.target.dataset.skip;
+  if (del) { rows = rows.filter(r => r.id !== del); check(); }
+  if (skip) { const r = rowById(skip); r.skip = !r.skip; check(); }
+});
+
+function addRows(list) {
+  if (rows.length + list.length > MAX) { alert(`The list can hold at most ${MAX.toLocaleString()} rows. Save these first.`); return false; }
+  rows.push(...list); $("result").innerHTML = ""; render(); return true;
+}
+
+// ------------------------------------------------------------ save
+async function save() {
+  $("confirm").disabled = true;
+  $("bar-msg").textContent = "Saving...";
+  try {
+    const r = await fetch("/api/books/save", {method: "POST", headers: {"Content-Type": "application/json"},
+                                              body: JSON.stringify({rows: rows.map(plain)})});
+    const data = await r.json();
+    if (!r.ok) { $("bar-msg").innerHTML = `<span class="err">Not saved: ${esc(data.error)}</span>`; check(); return null; }
+    rows = []; notices = []; ready = false; store.del(DRAFT); render();
+    $("result").innerHTML = `<div class="result" role="status"><b>Saved.</b> ${esc(data.message)}
+      <a href="/register">See the register</a> &middot; <a href="/activity">Activity log</a></div>`;
+    return data;
+  } catch (e) {
+    $("bar-msg").innerHTML = '<span class="err">No connection, so nothing was saved. Your list is kept as a draft; try again when the connection is back.</span>';
+    $("confirm").disabled = false;
+    return null;
+  }
+}
+$("confirm").addEventListener("click", save);
+$("clear").addEventListener("click", () => { if (rows.length && confirm("Clear the whole list? Nothing has been saved.")) { rows = []; check(); } });
+$("add-row").addEventListener("click", () => { addRows([blank("manual")]); check(); setTimeout(() => { const el = document.querySelector(`[data-id="${rows[rows.length - 1].id}"][data-f="title"]`); el && el.focus(); }, 0); });
+
+// ------------------------------------------------------------ tabs
+document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-tab]").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll(".panel").forEach(p => p.hidden = p.id !== "tab-" + b.dataset.tab);
+  if (b.dataset.tab === "scan") $("scan").focus();
+}));
+
+// ------------------------------------------------------------ book lookup (Open Library, fills blanks only)
+async function lookup({isbn, title, author}) {
+  const ctl = new AbortController();
+  const stop = setTimeout(() => ctl.abort(), 5000);
+  const q = isbn ? `isbn=${encodeURIComponent(isbn)}` : `title=${encodeURIComponent(title)}${author ? `&author=${encodeURIComponent(author)}` : ""}`;
+  try {
+    const r = await fetch(`https://openlibrary.org/search.json?${q}&fields=title,author_name,publisher,first_publish_year,isbn&limit=1`, {signal: ctl.signal});
+    const doc = (await r.json()).docs?.[0];
+    if (!doc) return null;
+    const isbns = doc.isbn || [];
+    return {title: doc.title || "", author: (doc.author_name || [])[0] || "", publisher: (doc.publisher || [])[0] || "",
+            year: doc.first_publish_year ? String(doc.first_publish_year) : "",
+            isbn: isbn || isbns.find(i => /^97[89]\d{10}$/.test(i)) || isbns[0] || ""};
+  } catch (e) { return null; } finally { clearTimeout(stop); }
+}
+function fill(r, found, fields) {
+  for (const f of fields) if (!String(r[f] || "").trim() && found[f]) r[f] = found[f];
+}
+
+// ------------------------------------------------------------ file upload
+let parsed = null;
+$("file").addEventListener("change", async () => {
+  const f = $("file").files[0];
+  if (!f) return;
+  $("file-msg").textContent = "Reading the file...";
+  $("mapping").hidden = true;
+  const body = new FormData(); body.append("file", f);
+  try {
+    const r = await fetch("/api/books/parse", {method: "POST", body});
+    const data = await r.json();
+    if (!r.ok) { $("file-msg").innerHTML = `<span class="err">${esc(data.error)}</span>`; return; }
+    parsed = data;
+  } catch (e) { $("file-msg").innerHTML = '<span class="err">The file could not be sent. Check the connection.</span>'; return; }
+  const key = "libramind.colmap." + parsed.headers.join("\u0001");
+  const remembered = store.get(key);
+  const map = remembered || parsed.guess;
+  $("map-note").textContent = `${parsed.rows.length} row(s) in ${f.name}. ` + (remembered
+    ? "Using the column matching you chose last time for this layout; change it if needed."
+    : "Check which column holds each detail (done once per file layout).");
+  $("map").innerHTML = FIELDS.map(fl => `<label>${LABELS[fl]}${fl === "title" || fl === "author" ? " *" : ""}
+    <select data-map="${fl}"><option value="">(not in this file)</option>
+    ${parsed.headers.map((h, i) => `<option value="${i}" ${map[fl] === i ? "selected" : ""}>${esc(h)}${parsed.rows[0] ? ` (e.g. ${esc(String(parsed.rows[0][i]).slice(0, 25))})` : ""}</option>`).join("")}
+    </select></label>`).join("");
+  $("mapping").hidden = false;
+  $("file-msg").textContent = "";
+  $("map-go").onclick = () => {
+    const m = {};
+    document.querySelectorAll("[data-map]").forEach(s => m[s.dataset.map] = s.value === "" ? null : Number(s.value));
+    if (m.title == null || m.author == null) { $("file-msg").innerHTML = '<span class="err">Choose the Title and Author columns.</span>'; return; }
+    store.set(key, m);
+    const list = parsed.rows.map(row => { const d = {}; FIELDS.forEach(fl => d[fl] = m[fl] == null ? "" : (row[m[fl]] ?? "")); return blank("file", d); });
+    if (addRows(list)) { $("mapping").hidden = true; $("file").value = ""; $("file-msg").textContent = `${list.length} row(s) added to the list. Checking...`; check(); }
+  };
+});
+
+// ------------------------------------------------------------ barcode scan
+$("scan").addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const raw = $("scan").value.trim();
+  $("scan").value = "";
+  if (!raw) return;
+  const digits = raw.replace(/[^0-9X]/gi, "").toUpperCase();
+  const same = rows.find(r => !r.skip && String(r.isbn).replace(/[^0-9X]/gi, "").toUpperCase() === digits);
+  if (same) {
+    same.copies = String((parseInt(same.copies, 10) || 0) + 1);
+    $("scan-msg").textContent = `Scanned again: ${same.title || digits} now has ${same.copies} copies in the list.`;
+    check(); return;
+  }
+  const r = blank("scan", {isbn: raw});
+  if (!addRows([r])) return;
+  $("scan-msg").textContent = /^(\d{9}[\dX]|\d{13})$/.test(digits) ? `Added ${raw}. Looking it up...` : `${raw} does not look like an ISBN; it is marked as an error.`;
+  looking.add(r.id); render();
+  const found = /^(\d{9}[\dX]|\d{13})$/.test(digits) ? await lookup({isbn: digits}) : null;
+  looking.delete(r.id);
+  const now = rowById(r.id);
+  if (now && found) fill(now, found, ["title", "author", "publisher", "year"]);
+  if (/^(\d{9}[\dX]|\d{13})$/.test(digits)) $("scan-msg").textContent = found ? `Found: ${found.title}${found.author ? " by " + found.author : ""}.` : `${raw}: not found online. Type the title and author in the list (or it may already be in the library).`;
+  check();
+});
+
+// ------------------------------------------------------------ voice
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const synth = window.speechSynthesis;
+let voiceOn = false, waiter = null, rec = null, restarts = 0;
+
+function talk(who, text) {
+  const t = $("talk");
+  if (t.querySelector(".muted")) t.innerHTML = "";
+  t.insertAdjacentHTML("beforeend", `<p class="${who === "AI" ? "ai" : "me"}"><b>${who === "AI" ? "Assistant" : "You"}:</b> ${esc(text)}</p>`);
+  t.scrollTop = t.scrollHeight;
+}
+function state(text) { $("voice-state").textContent = text; }
+
+function say(text) {
+  talk("AI", text);
+  return new Promise(done => {
+    if (!synth) return done();
+    stopListening();
+    let finished = false;
+    const end = () => { if (!finished) { finished = true; done(); } };
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-IN"; u.onend = end; u.onerror = end;
+    synth.cancel(); synth.speak(u);
+    setTimeout(end, 1500 + text.length * 85);   // some browsers never fire onend
+  });
+}
+function stopListening() { if (rec) { try { rec.abort(); } catch (e) {} rec = null; } }
+function deliver(heard) {
+  if (!waiter) return;
+  const w = waiter; waiter = null; stopListening();
+  talk("Me", heard.text);
+  w(heard);
+}
+function listen() {
+  if (!SR || !voiceOn || !waiter) return;
+  rec = new SR();
+  rec.lang = "en-IN"; rec.interimResults = false; rec.continuous = false; rec.maxAlternatives = 1;
+  let got = false;
+  rec.onresult = (e) => { got = true; restarts = 0; const alt = e.results[0][0]; deliver({text: alt.transcript, confidence: alt.confidence || 0}); };
+  rec.onerror = (e) => {
+    if (e.error === "network") { offline(); }
+    else if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      state("The microphone is blocked. Allow it in the address bar, or type in the box below.");
+    }
+  };
+  rec.onend = () => { if (!got && waiter && voiceOn && restarts++ < 40) setTimeout(listen, 250); };
+  try { rec.start(); state("Listening..."); } catch (e) {}
+}
+function hear() {
+  return new Promise(res => { waiter = res; state(SR ? "Listening..." : "Type your answer below."); listen(); });
+}
+function offline() {
+  stopListening();
+  state("The internet connection dropped. Your list is kept as a draft; press Start listening when it is back.");
+  saveDraft();
+}
+$("say-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = $("say").value.trim();
+  $("say").value = "";
+  if (!text) return;
+  if (!voiceOn) { startVoice(text); return; }
+  if (waiter) deliver({text, confidence: 1});
+});
+
+const NUM = {zero: 0, no: 0, none: 0, a: 1, an: 1, one: 1, won: 1, single: 1, two: 2, to: 2, too: 2, three: 3, four: 4, for: 4, five: 5,
+  six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15,
+  sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50};
+function toNumber(w) {
+  w = String(w || "").trim().toLowerCase();
+  if (/^-?\d+$/.test(w)) return parseInt(w, 10);
+  if (w.startsWith("minus ")) { const n = toNumber(w.slice(6)); return n == null ? null : -n; }
+  return w in NUM ? NUM[w] : null;
+}
+const SMALL = new Set(["a", "an", "and", "of", "the", "in", "on", "to", "for", "at", "by", "or"]);
+function titleCase(s) {
+  return s.trim().split(/\s+/).map((w, i) => (i && SMALL.has(w.toLowerCase())) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+const normText = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+function sim(a, b) {   // word overlap, enough to find "remove <title>"
+  a = new Set(normText(a).split(" ")); b = new Set(normText(b).split(" "));
+  if (!a.size || !b.size) return 0;
+  let same = 0; a.forEach(w => { if (b.has(w)) same++; });
+  return (2 * same) / (a.size + b.size);
+}
+const plural = (n) => `${n} ${n === 1 ? "copy" : "copies"}`;
+
+function parseBook(seg) {
+  const s = seg.trim().replace(/^(and|also|then)\s+/i, "").replace(/[,]+$/, "");
+  if (!s) return null;
+  let m = s.match(/^(\S+)\s+cop(?:y|ies)\s+of\s+(.+?)\s+by\s+(.+)$/i);
+  if (m) return {title: m[2], author: m[3], copiesWord: m[1]};
+  m = s.match(/^(.+?)\s*,?\s+by\s+(.+?)(?:\s*,?\s+(-?\w+)\s+cop(?:y|ies))?\s*$/i);
+  if (m) return {title: m[1], author: m[2], copiesWord: m[3]};
+  return null;
+}
+
+async function yesNo(question) {
+  for (let i = 0; i < 2; i++) {
+    await say(question);
+    const h = await hear();
+    if (!voiceOn) return false;
+    const t = normText(h.text);
+    if (/^(yes|yeah|yep|yup|correct|right|ok|okay|sure|save|save them|go ahead)\b/.test(t)) return true;
+    if (/^(no|nope|wrong|not|don t|do not)\b/.test(t)) return false;
+    question = "Sorry, please say yes or no.";
+  }
+  return false;
+}
+
+async function askCopies(r) {
+  let q = `'${r.match.title}' is already in the library with ${plural(r.match.total)}. How many copies are there in the library now? ` +
+          "You can also say add 2 more, skip, or it's a different book.";
+  for (let i = 0; i < 4 && voiceOn; i++) {
+    await say(q);
+    const h = await hear();
+    if (!voiceOn) return;
+    const t = normText(h.text);
+    let d = null, m;
+    if ((m = t.match(/^add (\S+(?: \S+)?) more/))) d = {mode: "add", value: toNumber(m[1])};
+    else if (/^(skip|no change|leave it|leave it as it is|none)$/.test(t)) d = {mode: "skip", value: ""};
+    else if (/different book|new book|separate book|another book/.test(t)) d = {mode: "new", value: ""};
+    else if ((m = t.match(/^(?:there are |it s |total |now )?(\S+)(?: copies| copy| in total| now)?$/)) && toNumber(m[1]) != null) d = {mode: "set", value: toNumber(m[1])};
+    if (!d || (d.value !== "" && d.value == null)) { q = "Sorry, I didn't catch that. Say a number, add some more, skip, or different book."; continue; }
+    if (d.value !== "" && d.value < 1) { q = "Copies must be 1 or more. How many copies are there now?"; continue; }
+    const row = rowById(r.id);
+    if (!row) return;
+    row.decision = {mode: d.mode, value: String(d.value)};
+    await check();
+    const after = rowById(r.id);
+    if (after && after.status === "exists" && after.message) { q = after.message + " How many copies are there now?"; continue; }
+    await say(d.mode === "set" ? `OK, ${plural(d.value)} in total.` : d.mode === "add" ? `OK, adding ${plural(d.value)}, ${r.match.total + d.value} in total.`
+              : d.mode === "skip" ? "OK, no change for that one." : "OK, it will be saved as a separate book.");
+    return;
+  }
+  if (voiceOn) await say("I'll leave that question in the list on the screen.");
+}
+
+async function addSpoken(b, confidence) {
+  let copies = 1;
+  if (b.copiesWord) {
+    copies = toNumber(b.copiesWord);
+    if (copies == null) { await say(`Sorry, how many copies of ${b.title}? Please say the book again.`); return; }
+    if (copies < 1) { await say("Copies must be 1 or more, so I didn't add that. Please say it again."); return; }
+  }
+  b.title = titleCase(b.title); b.author = titleCase(b.author);
+  if (confidence && confidence < 0.6 && !(await yesNo(`Did you say '${b.title}' by ${b.author}?`))) { await say("OK, please say it again."); return; }
+  if (!voiceOn) return;
+  state("Looking the book up...");
+  const found = await lookup({title: b.title, author: b.author});
+  const extra = {};
+  if (found) {
+    const differs = normText(found.title) !== normText(b.title) || (found.author && normText(found.author) !== normText(b.author));
+    const close = sim(found.title, b.title) >= 0.5 || sim(found.author, b.author) >= 0.5;
+    if (differs && close) {
+      if (await yesNo(`Did you say '${found.title}' by ${found.author || b.author}?`)) {
+        b.title = found.title; b.author = found.author || b.author;
+        Object.assign(extra, {isbn: found.isbn, publisher: found.publisher, year: found.year});
+      }
+    } else if (!differs) Object.assign(extra, {isbn: found.isbn, publisher: found.publisher, year: found.year});
+  }
+  if (!voiceOn) return;
+  const r = blank("voice", {title: b.title, author: b.author, copies: String(copies), ...extra});
+  if (!addRows([r])) return;
+  await say(`Got it. ${b.title} by ${b.author}, ${plural(copies)}.`);
+  await check();
+  const row = rowById(r.id) || rows.find(x => x.source === "voice" && normText(x.title) === normText(b.title));
+  if (row && row.status === "exists" && !row.decision?.mode) await askCopies(row);
+  else if (row && row.status === "error") await say(`That one has a problem: ${row.message}`);
+  else if (row && row.id !== r.id) await say(`${b.title} was already in this list, so I added the copies together: ${plural(Number(row.copies))}.`);
+}
+
+const lastVoice = () => [...rows].reverse().find(r => r.source === "voice");
+
+async function readList() {
+  const live = rows.filter(r => !r.skip);
+  if (!live.length) return say("The list is empty.");
+  const parts = live.slice(0, 20).map((r, i) => `${i + 1}. ${r.title || r.isbn}${r.author ? " by " + r.author : ""}, ${plural(Number(r.copies) || 1)}.`);
+  await say(`${live.length} book${live.length === 1 ? "" : "s"}. ` + parts.join(" ") + (live.length > 20 ? ` And ${live.length - 20} more on the screen.` : ""));
+}
+
+async function finish() {
+  await check();
+  for (const r of rows.filter(x => x.status === "exists" && !x.decision?.mode)) { if (!voiceOn) return; await askCopies(r); }
+  const live = rows.filter(r => !r.skip && r.status !== "skip");
+  if (!live.length) return say("The list is empty, so there is nothing to save.");
+  const bad = rows.filter(r => !r.ready);
+  if (bad.length) return say(`${bad.length} row${bad.length === 1 ? " needs" : "s need"} fixing on the screen first. Fix or skip ${bad.length === 1 ? "it" : "them"}, then say save again or press Confirm.`);
+  if (await yesNo(`I have ${live.length} book${live.length === 1 ? "" : "s"} ready. Shall I save them?`)) {
+    const result = await save();
+    if (result) { await say(`Saved. ${result.message}`); stopVoice(); }
+    else await say("Saving did not work. The list is kept as a draft. Please try again.");
+  } else if (voiceOn) await say("OK, not saved. Carry on.");
+}
+
+async function handle(h) {
+  let t = normText(h.text).replace(/^(please )?add (the )?(following )?books?\b/, "").trim();
+  if (!t) return say("Go ahead: say the title, by the author, and the number of copies.");
+  let m;
+  if (/^(cancel|cancel everything|stop|quit)$/.test(t)) {
+    if (await yesNo("Cancel and clear the books added by voice? Nothing has been saved.")) {
+      rows = rows.filter(r => r.source !== "voice"); await check(); await say("Cancelled. Nothing was saved."); stopVoice();
+    } else await say("OK, carrying on.");
+    return;
+  }
+  if (/^(done|finish|finished|that s all|that is all|that s it|save|save them|save it|save the list)$/.test(t)) return finish();
+  if (/^(next|next book|next one)$/.test(t)) return say("Next book?");
+  if (/^undo( last| that)?$/.test(t)) {
+    const r = lastVoice();
+    if (!r) return say("There is nothing to undo.");
+    rows = rows.filter(x => x !== r); await check(); return say(`Removed ${r.title}.`);
+  }
+  if (/^read (the |my )?list$/.test(t)) return readList();
+  if (/^(help|what can i say)$/.test(t)) return say("Say a book as title, by author, number of copies. Or say next, undo last, remove a title, read the list, change copies to a number, save, or cancel.");
+  if ((m = t.match(/^(?:no )?change (?:the )?(copies|copy|title|author) to (.+)$/))) {
+    const r = lastVoice();
+    if (!r) return say("There is no book to change yet.");
+    if (m[1].startsWith("cop")) {
+      const n = toNumber(m[2].replace(/ cop(y|ies)$/, ""));
+      if (n == null || n < 1) return say("Copies must be a number of 1 or more.");
+      r.copies = String(n); await check(); return say(`Changed. ${r.title}, ${plural(n)}.`);
+    }
+    r[m[1]] = titleCase(m[2]); await check(); return say(`Changed. ${r.title} by ${r.author}, ${plural(Number(r.copies) || 1)}.`);
+  }
+  if ((m = t.match(/^(?:remove|delete) (.+)$/))) {
+    let best = null, score = 0.5;
+    rows.forEach(r => { const s = sim(r.title, m[1]); if (s > score) { best = r; score = s; } });
+    if (!best) return say(`I couldn't find ${m[1]} in the list.`);
+    if (!(await yesNo(`Remove ${best.title}?`))) return say("OK, kept it.");
+    rows = rows.filter(x => x !== best); await check(); return say(`Removed ${best.title}.`);
+  }
+  // One or more books, separated by "next" or full stops.
+  const segs = h.text.split(/\bnext\b|[.;]/i).map(s => s.trim()).filter(Boolean)
+                 .map(s => s.replace(/^(please )?add (the )?(following )?books?\b[,:]?\s*/i, "")).filter(Boolean);
+  let added = 0;
+  for (const seg of segs) {
+    if (!voiceOn) return;
+    const b = parseBook(seg);
+    if (!b) { await say(`Sorry, I didn't catch "${seg}". Please say the title, then by and the author, then the number of copies.`); continue; }
+    await addSpoken(b, h.confidence); added++;
+  }
+  if (added && voiceOn) await say("Anything else?");
+}
+
+async function voiceLoop(first) {
+  if (rows.some(r => r.source === "voice")) await say("Welcome back. Your earlier voice list is still here. Carry on, or say read the list.");
+  else await say("Voice add is on. Say each book as: title, by author, and the number of copies. Say done when you have finished.");
+  if (first) await handle({text: first, confidence: 1});
+  while (voiceOn) {
+    const h = await hear();
+    if (!voiceOn) break;
+    try { await handle(h); } catch (e) { await say("Something went wrong. Your list is kept. Please say that again."); }
+  }
+}
+function startVoice(first) {
+  voiceOn = true; restarts = 0;
+  $("voice-btn").textContent = "Stop listening"; $("voice-btn").classList.add("on");
+  if (!SR) state("This browser can't listen. Type what you would say in the box below.");
+  voiceLoop(first);
+}
+function stopVoice() {
+  voiceOn = false; stopListening(); if (synth) synth.cancel();
+  if (waiter) { const w = waiter; waiter = null; w({text: "", confidence: 0}); }
+  $("voice-btn").textContent = "Start listening"; $("voice-btn").classList.remove("on");
+  state(rows.length ? "Stopped. The list below is kept as a draft until you save it." : "Stopped.");
+}
+$("voice-btn").addEventListener("click", () => voiceOn ? stopVoice() : startVoice());
+window.addEventListener("offline", () => { if (voiceOn) offline(); });
+
+// ------------------------------------------------------------ restore an unsaved draft
+const draft = store.get(DRAFT);
+if (Array.isArray(draft) && draft.length) {
+  rows = draft.map(d => blank(d.source || "manual", d));
+  notices = [`Your unsaved list from last time (${draft.length} row${draft.length === 1 ? "" : "s"}) has been kept. Save it, or press Clear the list.`];
+  render(); check().then(() => { notices.unshift(`Your unsaved list from last time (${draft.length} row${draft.length === 1 ? "" : "s"}) has been kept.`); render(); });
+} else render();
+})();
+</script>
+{% endblock %}

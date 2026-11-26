@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Preview students{% endblock %}
+{% block content %}
+<h1>Preview: {{ new }} new, {{ rows | length - new }} with errors</h1>
+<p class="muted">Nothing is saved yet. Rows marked Error are skipped; fix them in the file and upload it again if you need them.</p>
+<div style="overflow-x:auto">
+<table>
+  <tr><th>Status</th>{% for f in fields %}<th>{{ labels[f] }}</th>{% endfor %}</tr>
+  {% for r in rows %}
+  <tr>
+    <td>{% if r.status == 'new' %}<span aria-hidden="true">&#x1F7E2;</span> New{% else %}<span aria-hidden="true">&#x1F534;</span> <b>Error:</b> {{ r.errors | join(' ') }}{% endif %}</td>
+    {% for f in fields %}<td>{{ r[f] }}</td>{% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<form method="post" action="/students/upload/save" class="row" style="margin-top:1rem">
+  <input type="hidden" name="rows" value="{{ payload }}">
+  <button {% if not new %}disabled{% endif %}>Confirm: add {{ new }} student{{ '' if new == 1 else 's' }}</button>
+  <a href="/students#bulk">Cancel</a>
+</form>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Remove student{% endblock %}
+{% block content %}
+<h1>Remove {{ s.name }} ({{ s.student_id }})</h1>
+{% if s.status == 'Inactive' %}
+<div class="msg">This student has already been removed. <a href="/students?show=Inactive&q={{ s.student_id | urlencode }}">Restore them</a> from the Students page.</div>
+{% elif blocked %}
+<div class="alert" role="alert"><b>{{ blocked }}</b></div>
+{% if loans %}<div class="card"><h2 class="sub">Books not returned</h2><ul>
+  {% for l in loans %}<li>{{ l.book_name }} ({{ l.book_id }}), due {{ l.due_date }}</li>{% endfor %}</ul></div>{% endif %}
+{% if fines %}<div class="card"><h2 class="sub">Unpaid fines</h2><ul>
+  {% for f in fines %}<li>Fine #{{ f.fine_id }}: &#8377;{{ '%g' % f.amount }} ({{ f.reason }})</li>{% endfor %}</ul>
+  <p class="muted">Mark fines paid or waived on <a href="/librarian">Librarian tools</a>.</p></div>{% endif %}
+<p><a href="/students">Back to students</a></p>
+{% else %}
+<div class="card">
+  <p>Class {{ s.grade or '-' }}{% if s.section %} {{ s.section }}{% endif %}. No books out and no unpaid fines.</p>
+  <p>Removing makes the student <b>Inactive</b>: they can't borrow, any reservations they hold end, and their borrowing history stays in the reports.
+    You can restore them later.</p>
+  <form method="post" action="/students/{{ s.student_id | urlencode }}/remove" class="row">
+    <button class="danger">Yes, remove {{ s.name }}</button>
+    <a href="/students">Cancel</a>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

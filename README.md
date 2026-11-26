@@ -47,6 +47,23 @@ CSV columns:
 - `students.csv`: `student_id,name,grade,contact_email`
 - `members.csv`: `name,email,role` (role is `committee` or `librarian`). Several people may share one email; after the sign-in code they choose their name
 
+## Adding books and students (librarian)
+
+Signed in as the librarian, the menu has **Add books**, **Students** and **Activity log** (MINI SPEC).
+
+- **Add books**: upload a CSV or Excel file (ISBN, Title, Author, Publisher, Year, Category, Copies), scan
+  barcodes one after another, use **🎤 Voice Add**, or type books in. Everything lands in one preview where each
+  row is 🟢 New, 🟡 Already exists or 🔴 Error. For a book already in the library you choose the copy count
+  (total now, add more, skip, or "it's a different book"); the total can't drop below the copies that are out.
+  Nothing is saved until **Confirm** (or "Yes" in voice mode). Unsaved lists are kept in the browser as a draft.
+- Each physical copy is still one row in the register (B-346, B-346-2, ...); raising a title's copy count adds
+  rows, lowering it removes copies that are on the shelf.
+- Voice uses the browser's own speech recognition (Chrome or Edge), English for now, with no AI key or cost.
+  Missing ISBN, publisher and year are looked up on Open Library (only the book title or ISBN is sent).
+- **Students**: add one, upload many (CSV/Excel), remove or restore. Removing is blocked while the student has
+  books out or unpaid fines; otherwise they become Inactive, keep their history, and can't borrow.
+- **Activity log** lists every bulk add, copy change and student add, remove or restore.
+
 ## Using PostgreSQL instead of library.db
 
 By default the data lives in the SQLite file `library.db`. To keep it in a hosted PostgreSQL
