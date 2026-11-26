@@ -47,6 +47,11 @@ CSV columns:
 - `students.csv`: `student_id,name,grade,contact_email`
 - `members.csv`: `name,email,role` (role is `committee` or `librarian`). Several people may share one email; after the sign-in code they choose their name
 
+**Everyday launcher:** double-click `scripts\Library App.bat` (or put a shortcut to it on the desktop). It
+starts the app for this computer and the school network with password sign-in. It reads `SESSION_SECRET`
+(and `DATABASE_URL`, if used) from `settings.env`, which is never committed, and refuses to start if
+`SESSION_SECRET` is missing.
+
 ## Adding books and students (librarian)
 
 Signed in as the librarian, the menu has **Add books**, **Students** and **Activity log** (MINI SPEC).
