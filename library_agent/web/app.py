@@ -115,7 +115,7 @@ STUDENT_LABELS = {"student_id": "Student ID", "name": "Full name", "grade": "Cla
 
 def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | None = None,
                ai_enabled: bool | None = None) -> FastAPI:
-    app = FastAPI(title="LibraMind AI")
+    app = FastAPI(title="LibraMind")
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret)
     # The school logo and other images.
     app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
