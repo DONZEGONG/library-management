@@ -142,8 +142,10 @@ def correct_state(conn, book_id: str, new_status: str, reason: str, librarian: s
     conn.commit()
 
 
-def delete_record(conn, table: str, record_id, reason: str, librarian: str) -> None:
-    """Soft delete: hidden from the register but kept for the audit (PLAN 2.10)."""
+def delete_record(conn, table: str, record_id, reason: str, librarian: str) -> str:
+    """Soft delete: hidden from the register but kept for the audit (PLAN 2.10).
+    Deleting a loan that is still open puts its book back on the shelf (or holds
+    it for the next reservation), so the book is not left showing Borrowed."""
     _need_reason(reason)
     keys = {"books": "book_id", "students": "student_id", "loans": "loan_id"}
     if table not in keys:
@@ -153,6 +155,9 @@ def delete_record(conn, table: str, record_id, reason: str, librarian: str) -> N
             record_id = int(record_id)
         except ValueError:
             raise LibrarianError(f"Loan ID must be a number, not {record_id}.") from None
+    loan = None
+    if table == "loans":
+        loan = conn.execute("SELECT * FROM loans WHERE loan_id = ? AND deleted_at IS NULL", (record_id,)).fetchone()
     cur = conn.execute(
         f"UPDATE {table} SET deleted_at = ?, deleted_by = ?, delete_reason = ?"
         f" WHERE {keys[table]} = ? AND deleted_at IS NULL",
@@ -160,5 +165,21 @@ def delete_record(conn, table: str, record_id, reason: str, librarian: str) -> N
     )
     if cur.rowcount == 0:
         raise LibrarianError(f"No {table[:-1]} {record_id} to delete.")
-    states.record_decision(conn, "record_deleted", f"{table[:-1]} {record_id} deleted: {reason}", librarian)
+    summary = f"{table[:-1]} {record_id} deleted: {reason}"
+    message = f"{table[:-1].capitalize()} {record_id} deleted."
+    if loan is not None and loan["return_date"] is None:
+        book = register.get_book(conn, loan["book_id"])
+        if book and book["status"] in (states.BORROWED, states.OVERDUE):
+            from .approvals import _activate_next_reservation
+
+            states.set_status(conn, loan["book_id"], states.AVAILABLE)
+            held = _activate_next_reservation(conn, loan["book_id"], date.today())
+            where = "held for the next reservation" if held else "back to Available"
+            summary += f"; book {loan['book_id']} {where}"
+            message += f" Book {loan['book_id']} is {where}."
+    states.record_decision(conn, "record_deleted", summary, librarian,
+                           book_id=loan["book_id"] if loan else None,
+                           student_id=loan["student_id"] if loan else None,
+                           loan_id=loan["loan_id"] if loan else None)
     conn.commit()
+    return message
