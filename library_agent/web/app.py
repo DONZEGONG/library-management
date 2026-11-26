@@ -517,7 +517,7 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
             "SELECT n.*, b.name AS book_name FROM notifications n JOIN loans l ON l.loan_id = n.loan_id"
             " JOIN books b ON b.book_id = l.book_id WHERE n.kind = 'payup' AND n.status = 'draft'"
         ).fetchall()
-        return page(request, "librarian.html", user, fines=fines, drafts=drafts,
+        return page(request, "librarian.html", user, fines=fines, drafts=drafts, max_fine=settings.max_fine,
                     message=request.query_params.get("msg"))
 
     def _do(fn, *args):

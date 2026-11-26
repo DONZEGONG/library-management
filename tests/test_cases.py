@@ -278,3 +278,17 @@ def test_20_password_is_not_stored(ctx):
     for table in ("chat_sessions", "tool_calls", "pending_actions", "notifications"):
         for row in ctx.conn.execute(f"SELECT * FROM {table}"):
             assert "Tiger@123" not in json.dumps(dict(row))
+
+
+def test_fine_limit(ctx):
+    """A fine can't be more than MAX_FINE (default 2,000 rupees), nor zero or not a number."""
+    import pytest
+    from library_agent.librarian import LibrarianError
+    run_tool(ctx, "save_borrowing_details", {"book_id": "B-101", "student": "S-001"})
+    approvals.approve(ctx.conn, 1, "Librarian", today=FRIDAY)
+    loan_id = ctx.conn.execute("SELECT loan_id FROM loans").fetchone()[0]
+    for bad in (2000.01, 1e197, 0, -5, float("nan")):
+        with pytest.raises(LibrarianError):
+            librarian.set_fine(ctx.conn, loan_id, bad, "test", "Librarian", send_payup=False)
+    librarian.set_fine(ctx.conn, loan_id, 2000, "replacement", "Librarian", send_payup=False)
+    assert ctx.conn.execute("SELECT amount FROM fines").fetchone()[0] == 2000
