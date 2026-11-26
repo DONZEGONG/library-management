@@ -292,3 +292,22 @@ def test_fine_limit(ctx):
             librarian.set_fine(ctx.conn, loan_id, bad, "test", "Librarian", send_payup=False)
     librarian.set_fine(ctx.conn, loan_id, 2000, "replacement", "Librarian", send_payup=False)
     assert ctx.conn.execute("SELECT amount FROM fines").fetchone()[0] == 2000
+
+
+def test_deleting_open_loan_puts_book_back(ctx):
+    run_tool(ctx, "save_borrowing_details", {"book_id": "B-201", "student": "S-001"})
+    approvals.approve(ctx.conn, 1, "Librarian", today=FRIDAY)
+    loan_id = ctx.conn.execute("SELECT loan_id FROM loans").fetchone()[0]
+    msg = librarian.delete_record(ctx.conn, "loans", str(loan_id), "entered by mistake", "Librarian")
+    assert "back to Available" in msg
+    assert register.get_book(ctx.conn, "B-201")["status"] == states.AVAILABLE
+
+
+def test_deleting_open_loan_hands_book_to_reservation(ctx):
+    run_tool(ctx, "save_borrowing_details", {"book_id": "B-201", "student": "S-001"})
+    approvals.approve(ctx.conn, 1, "Librarian", today=FRIDAY)
+    run_tool(ctx, "reserve_book", {"book_id": "B-201", "student": "S-002"})
+    loan_id = ctx.conn.execute("SELECT loan_id FROM loans").fetchone()[0]
+    msg = librarian.delete_record(ctx.conn, "loans", str(loan_id), "entered by mistake", "Librarian")
+    assert "held for the next reservation" in msg
+    assert register.get_book(ctx.conn, "B-201")["status"] == states.RESERVED

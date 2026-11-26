@@ -522,8 +522,8 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
 
     def _do(fn, *args):
         try:
-            fn(*args)
-            return _redirect("/librarian", "Saved.")
+            result = fn(*args)
+            return _redirect("/librarian", result if isinstance(result, str) else "Saved.")
         except (librarian.LibrarianError, PayupNotAllowed, ValueError, LookupError) as e:
             return _redirect("/librarian", e)
 
