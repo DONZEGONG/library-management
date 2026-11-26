@@ -2,7 +2,7 @@
 add, remove or restore is written here, with who did it and how."""
 from .db import now
 
-ACTIONS = ("BULK_ADD", "UPDATE_COPIES", "ADD_STUDENT", "REMOVE_STUDENT", "RESTORE_STUDENT")
+ACTIONS = ("BULK_ADD", "UPDATE_COPIES", "ADD_STUDENT", "EDIT_STUDENT", "REMOVE_STUDENT", "RESTORE_STUDENT")
 SOURCES = ("file", "scan", "voice", "manual")
 
 

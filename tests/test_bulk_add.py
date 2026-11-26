@@ -257,3 +257,28 @@ def test_web_students_flow(web):
     assert "inactive" in r.text
     assert "S-800" in web.get("/students?show=Inactive").text
     assert "restored" in web.post("/students/S-800/restore").text
+
+
+def test_edit_student(conn):
+    roster.edit_student(conn, "S-001", {"name": "Asha R. Rao", "grade": "8", "section": "C"}, "Lib")
+    s = roster.get(conn, "S-001")
+    assert (s["name"], s["grade"], s["section"]) == ("Asha R. Rao", "8", "C")
+    log = activity.recent(conn)[0]
+    assert log["action"] == "EDIT_STUDENT" and "Asha R. Rao" in log["details"]
+    with pytest.raises(roster.RosterError, match="Full name is missing"):
+        roster.edit_student(conn, "S-001", {"name": ""}, "Lib")
+    assert roster.edit_student(conn, "S-001", {"name": "Asha R. Rao", "grade": "8", "section": "C",
+                                               "email": s["contact_email"]}, "Lib")["changed"] == []
+
+
+def test_web_edit_student(web):
+    web.post("/login", data={"email": "lib@s.example"})
+    assert "/students/S-001/edit" in web.get("/students").text
+    page = web.get("/students/S-001/edit").text
+    assert "Asha Rao" in page and "can't be changed" in page
+    r = web.post("/students/S-001/edit", data={"name": "", "grade": "7"})
+    assert "Full name is missing" in r.text
+    r = web.post("/students/S-001/edit", data={"name": "Asha Rao", "grade": "9"})
+    assert "Saved changes for S-001" in r.text
+    web.post("/login", data={"email": "mem@s.example"})
+    assert web.get("/students/S-001/edit").status_code == 403

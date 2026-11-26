@@ -664,6 +664,32 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
             return RedirectResponse(f"/students?error={quote(str(e))}", 303)
         return _redirect("/students", result["message"])
 
+    @app.get("/students/{student_id}/edit", response_class=HTMLResponse)
+    def student_edit_page(request: Request, student_id: str, user=Depends(librarian_only),
+                          conn=Depends(get_conn)):
+        s = roster.get(conn, student_id)
+        if s is None:
+            raise HTTPException(404, f"No student {student_id}.")
+        form = request.session.pop("student_edit", None) or {
+            "name": s["name"], "grade": s["grade"], "section": s["section"], "phone": s["phone"],
+            "email": s["contact_email"], "photo_url": s["photo_url"]}
+        return page(request, "student_edit.html", user, s=s, form=form, error=request.query_params.get("error"))
+
+    @app.post("/students/{student_id}/edit")
+    def student_edit(request: Request, student_id: str, name: str = Form(""), grade: str = Form(""),
+                     section: str = Form(""), phone: str = Form(""), email: str = Form(""),
+                     photo_url: str = Form(""), user=Depends(librarian_only), conn=Depends(get_conn)):
+        data = {"name": name, "grade": grade, "section": section, "phone": phone, "email": email,
+                "photo_url": photo_url}
+        try:
+            result = roster.edit_student(conn, student_id, data, user["name"])
+        except roster.RosterError as e:
+            request.session["student_edit"] = data  # keep what was typed
+            return RedirectResponse(f"/students/{quote(student_id)}/edit?error={quote(str(e))}", 303)
+        if not result["changed"]:
+            return _redirect("/students", f"No changes for {student_id.upper()}.")
+        return _redirect("/students", f"Saved changes for {student_id.upper()} ({name.strip()}).")
+
     @app.get("/students/{student_id}/remove", response_class=HTMLResponse)
     def student_remove_page(request: Request, student_id: str, user=Depends(librarian_only),
                             conn=Depends(get_conn)):
