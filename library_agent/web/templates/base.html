@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Library{% endblock %} · LibraMind AI</title>
+<title>{% block title %}Library{% endblock %} · LibraMind</title>
 <style>
   :root { --ink:#1d2433; --muted:#5b6475; --line:#d9dde5; --bg:#f1f5fb; --brand-navy:#0f2944; --on-navy:#ffffff; --on-navy-muted:#c3cfe0; --accent:var(--brand-navy); --red:#c62828; --redbg:#fdecec; }
   * { box-sizing: border-box; }
@@ -48,12 +48,12 @@
 <body>
 {% if not user %}
 <nav>
-  <span class="brand"><img src="/static/logo-mark.png" alt="" width="36" height="36"><span class="brand-name"><b>LibraMind AI</b><small>School Library</small></span></span>
+  <span class="brand"><img src="/static/logo-mark.png" alt="" width="36" height="36"><span class="brand-name"><b>LibraMind</b><small>School Library</small></span></span>
 </nav>
 {% endif %}
 {% if user %}
 <nav>
-  <a class="brand" href="/"><img src="/static/logo-mark.png" alt="" width="36" height="36"><span class="brand-name"><b>LibraMind AI</b><small>School Library</small></span></a>
+  <a class="brand" href="/"><img src="/static/logo-mark.png" alt="" width="36" height="36"><span class="brand-name"><b>LibraMind</b><small>School Library</small></span></a>
   <a href="/desk">Desk</a>
   {% if ai_enabled %}<a href="/">Chat</a>{% endif %}
   <a href="/approvals">Approvals</a>

@@ -2,7 +2,7 @@
 {% block title %}Chat{% endblock %}
 {% block content %}
 <div class="row" style="justify-content:space-between">
-  <h1>Ask LibraMind AI</h1>
+  <h1>Ask LibraMind</h1>
   <form method="post" action="/chat/new"><button class="secondary">New conversation</button></form>
 </div>
 {% if pending %}<div class="msg"><a href="/approvals">{{ pending }} action(s) waiting for approval</a></div>{% endif %}
