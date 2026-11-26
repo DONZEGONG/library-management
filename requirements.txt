@@ -6,3 +6,4 @@ itsdangerous>=2.2
 httpx>=0.27
 pytest>=7.4
 psycopg[binary]>=3.2   # PostgreSQL (only used when DATABASE_URL is set)
+openpyxl>=3.1         # reading Excel (.xlsx) uploads

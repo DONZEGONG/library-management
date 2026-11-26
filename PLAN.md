@@ -190,6 +190,31 @@ The 5 written test cases plus 15 new ones. These 15 also complete the "15 more t
 
 ---
 
+## Phase 8: Bulk add books, students and voice (MINI SPEC, 2026-11-26)
+
+Open questions settled with the spec's recommendations: removing a student is a soft delete (Inactive); the
+duplicate question asks for the total copies (with "add more" also accepted); voice is English at launch;
+accession numbers per copy stay as they are (each copy already has its own book ID).
+
+- [x] **8.1** Database: books get isbn, publisher, year, created_at, updated_at; students get section, phone,
+  photo_url, status (Active/Inactive), created_at, removed_at; new activity_log table (also in backups)
+- [x] **8.2** Bulk add books from a CSV or Excel file, with column matching remembered per file layout, max 1,000 rows
+- [x] **8.3** Barcode/ISBN scan list with Open Library lookup
+- [x] **8.4** Preview with New / Already exists / Error, merge of repeats in one upload, save in one step with a summary
+- [x] **8.5** Duplicate handling: same ISBN or title+author over 90% similar (title alone when the old entry has no
+  author); set total, add more, skip or different book; total never below copies issued
+- [x] **8.6** Voice Add: speech to the same preview, read-back after every book, "Did you say...?" when unsure,
+  copy question out loud, commands Next / Undo last / Remove / Read the list / change copies / Save / Cancel,
+  nothing saved without "Yes" or Confirm, draft kept if the connection drops
+- [x] **8.7** Add student (duplicate ID blocked), bulk student upload with preview
+- [x] **8.8** Remove student: blocked by unreturned books or unpaid fines, else Inactive; restore; inactive
+  students can't borrow or reserve
+- [x] **8.9** Activity log page; tests in tests/test_bulk_add.py (SQLite and PostgreSQL)
+- [ ] **8.10** Try it on the real catalogue with the librarian (a small file, a few scans, a voice session of 10 books)
+- [ ] **8.11** Later: Hindi/Malayalam voice, photo upload (today a photo is a web link)
+
+---
+
 ## Still to do in the spec
 
 - [x] Memory architecture drawing (Layer 4). Draw it during Phase 1, once the tables are final.

@@ -54,6 +54,13 @@ def _resolve_student(conn, student: str):
     raise ToolError(f"More than one student matches '{student}': {names}. Ask the user which one.")
 
 
+def _ensure_active(student) -> None:
+    from .roster import INACTIVE, inactive_message
+
+    if student["status"] == INACTIVE:
+        raise ToolError(inactive_message(student))
+
+
 def _resolve_book(conn, book_id: str):
     row = register.get_book(conn, book_id)
     if row is None:
@@ -156,6 +163,7 @@ def search_past_decisions(ctx: ToolContext, kind: str = "", student_id: str = ""
 def save_borrowing_details(ctx: ToolContext, book_id: str, student: str) -> dict:
     book = _resolve_book(ctx.conn, book_id)
     s = _resolve_student(ctx.conn, student)
+    _ensure_active(s)
     _ensure_no_pending(ctx.conn, book_id)
     if book["status"] == states.RESERVED:
         res = register.active_reservation(ctx.conn, book_id)
@@ -258,6 +266,7 @@ def escalate_to_librarian(ctx: ToolContext, summary: str, book_id: str = "", stu
 def reserve_book(ctx: ToolContext, book_id: str, student: str) -> dict:
     book = _resolve_book(ctx.conn, book_id)
     s = _resolve_student(ctx.conn, student)
+    _ensure_active(s)
     if ctx.conn.execute(
         "SELECT 1 FROM reservations WHERE book_id = ? AND student_id = ? AND active = 1",
         (book_id, s["student_id"]),

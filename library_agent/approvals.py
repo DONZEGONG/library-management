@@ -84,6 +84,9 @@ def _borrow(conn, d, human, today, flags):
     student = register.get_student(conn, d["student_id"])
     if book is None or student is None:
         raise ApprovalError("The book or student no longer exists.")
+    if student["status"] == "Inactive":
+        raise ApprovalError(f"{student['name']} has been removed (inactive) since this was suggested, "
+                            "so the loan cannot be saved. The librarian can restore them on the Students page.")
     if book["status"] == states.RESERVED:
         res = register.active_reservation(conn, d["book_id"])
         if res is None or res["student_id"] != d["student_id"]:

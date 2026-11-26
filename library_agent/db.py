@@ -152,6 +152,16 @@ CREATE TABLE IF NOT EXISTS login_attempts (
     since       REAL NOT NULL
 );
 
+-- Who added books, changed copy counts, or added and removed students (MINI SPEC 4).
+CREATE TABLE IF NOT EXISTS activity_log (
+    activity_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_name   TEXT NOT NULL,
+    action      TEXT NOT NULL,   -- BULK_ADD, UPDATE_COPIES, ADD_STUDENT, REMOVE_STUDENT, RESTORE_STUDENT
+    details     TEXT NOT NULL,
+    source      TEXT NOT NULL,   -- file, scan, voice or manual
+    created_at  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS member_passwords (
     member_key    TEXT PRIMARY KEY,
     password_hash TEXT NOT NULL,
@@ -183,11 +193,11 @@ FOR EACH ROW EXECUTE FUNCTION correction_log_locked();
 # auto-numbered column. Used by backup, restore and the move to PostgreSQL.
 TABLES = ("books", "students", "loans", "reservations", "fines", "pending_actions",
           "human_decisions", "correction_log", "notifications", "tool_calls", "chat_sessions",
-          "member_passwords")
+          "member_passwords", "activity_log")
 AUTO_IDS = {"loans": "loan_id", "reservations": "reservation_id", "fines": "fine_id",
             "pending_actions": "action_id", "human_decisions": "decision_id",
             "correction_log": "correction_id", "notifications": "notification_id",
-            "tool_calls": "call_id"}
+            "tool_calls": "call_id", "activity_log": "activity_id"}
 
 
 def now() -> str:
@@ -311,7 +321,20 @@ def init_db(conn) -> None:
 # Columns added after the first release. CREATE TABLE IF NOT EXISTS leaves an
 # existing table alone, so older databases get these added here.
 NEW_COLUMNS = {
-    "books": {"category": "TEXT NOT NULL DEFAULT ''"},
+    "books": {"category": "TEXT NOT NULL DEFAULT ''",
+              # Bulk add (MINI SPEC 4). Each row is still one physical copy.
+              "isbn": "TEXT NOT NULL DEFAULT ''",
+              "publisher": "TEXT NOT NULL DEFAULT ''",
+              "year": "TEXT NOT NULL DEFAULT ''",
+              "created_at": "TEXT",
+              "updated_at": "TEXT"},
+    "students": {"section": "TEXT NOT NULL DEFAULT ''",
+                 "phone": "TEXT NOT NULL DEFAULT ''",
+                 "photo_url": "TEXT NOT NULL DEFAULT ''",
+                 # Removing a student makes them Inactive; the record and history stay.
+                 "status": "TEXT NOT NULL DEFAULT 'Active'",
+                 "created_at": "TEXT",
+                 "removed_at": "TEXT"},
 }
 
 
@@ -335,6 +358,9 @@ def copy_tables(src, dst) -> int:
     empty. Keeps the original IDs. Returns the number of rows copied."""
     total = 0
     for table in TABLES:
+        if src.dialect == "sqlite" and not src.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone():
+            continue  # an older backup made before this table existed
         rows = src.execute(f"SELECT * FROM {table}").fetchall()
         if not rows:
             continue

@@ -11,13 +11,13 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from .. import approvals, librarian, passwords, register
+from .. import activity, approvals, catalogue, librarian, passwords, register, roster, uploads
 from ..agent import LibraryAgent
 from ..config import settings
 from ..db import connect, init_db
@@ -109,6 +109,8 @@ class LoginCodes:
 DESK_TOOLS = {"borrow": "save_borrowing_details", "return": "update_return_status",
               "renew": "renew_loan", "reserve": "reserve_book", "refer": "escalate_to_librarian"}
 DESK_BOOK_LIMIT = 100  # enough to list the largest category (Stories) in full
+STUDENT_LABELS = {"student_id": "Student ID", "name": "Full name", "grade": "Class/Grade",
+                  "section": "Section", "phone": "Phone", "email": "Email", "photo_url": "Photo link"}
 
 
 def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | None = None,
@@ -567,6 +569,135 @@ def create_app(db_path: str | None = None, agent_factory=None, mailer: Mailer | 
     def corrections(request: Request, user=Depends(current_user), conn=Depends(get_conn)):
         rows = conn.execute("SELECT * FROM correction_log ORDER BY correction_id DESC").fetchall()
         return page(request, "corrections.html", user, rows=rows)
+
+    # ------------------------------------------------------------ add books (MINI SPEC 3.1, 3.4, 3.5)
+
+    @app.get("/books/add", response_class=HTMLResponse)
+    def books_add_page(request: Request, user=Depends(librarian_only), conn=Depends(get_conn)):
+        return page(request, "books_add.html", user, categories=register.categories(conn),
+                    max_rows=uploads.MAX_ROWS)
+
+    async def _read_upload(file: UploadFile, synonyms: dict) -> dict:
+        data = await file.read()
+        if len(data) > 5 * 1024 * 1024:
+            raise uploads.UploadError("The file is bigger than 5 MB. Split it into smaller files.")
+        headers, rows = uploads.read_table(file.filename or "", data)
+        return {"headers": headers, "rows": rows, "guess": uploads.guess_columns(headers, synonyms)}
+
+    @app.post("/api/books/parse")
+    async def books_parse(file: UploadFile = File(...), user=Depends(librarian_only)):
+        try:
+            return await _read_upload(file, catalogue.SYNONYMS)
+        except uploads.UploadError as e:
+            return JSONResponse({"error": str(e)}, 400)
+
+    @app.post("/api/books/check")
+    def books_check(payload: dict = Body(...), user=Depends(librarian_only), conn=Depends(get_conn)):
+        try:
+            return catalogue.public(catalogue.check(conn, list(payload.get("rows") or [])))
+        except catalogue.CatalogueError as e:
+            return JSONResponse({"error": str(e)}, 400)
+
+    @app.post("/api/books/save")
+    def books_save(payload: dict = Body(...), user=Depends(librarian_only), conn=Depends(get_conn)):
+        try:
+            return catalogue.save(conn, list(payload.get("rows") or []), user["name"])
+        except catalogue.CatalogueError as e:
+            return JSONResponse({"error": str(e)}, 400)
+
+    # ------------------------------------------------------------ students (MINI SPEC 3.2, 3.3)
+
+    @app.get("/students", response_class=HTMLResponse)
+    def students_page(request: Request, q: str = "", show: str = "Active",
+                      user=Depends(librarian_only), conn=Depends(get_conn)):
+        show = show if show in (roster.ACTIVE, roster.INACTIVE, "All") else roster.ACTIVE
+        return page(request, "students.html", user, q=q, show=show, students=roster.search(conn, q, show),
+                    message=request.query_params.get("msg"), error=request.query_params.get("error"),
+                    form=request.session.pop("student_form", None) or {})
+
+    @app.post("/students/add")
+    def students_add(request: Request, student_id: str = Form(""), name: str = Form(""),
+                     grade: str = Form(""), section: str = Form(""), phone: str = Form(""),
+                     email: str = Form(""), photo_url: str = Form(""),
+                     user=Depends(librarian_only), conn=Depends(get_conn)):
+        data = {"student_id": student_id, "name": name, "grade": grade, "section": section,
+                "phone": phone, "email": email, "photo_url": photo_url}
+        try:
+            row = roster.add_student(conn, data, user["name"])
+        except roster.RosterError as e:
+            request.session["student_form"] = data  # keep what was typed
+            return RedirectResponse(f"/students?error={quote(str(e))}#add", 303)
+        return _redirect("/students", f"Added {row['name']} ({row['student_id']}).")
+
+    @app.post("/students/upload", response_class=HTMLResponse)
+    async def students_upload(request: Request, file: UploadFile = File(...), user=Depends(librarian_only)):
+        try:
+            parsed = await _read_upload(file, roster.SYNONYMS)
+        except uploads.UploadError as e:
+            return RedirectResponse(f"/students?error={quote(str(e))}#bulk", 303)
+        return page(request, "students_map.html", user, parsed=parsed, fields=roster.FIELDS,
+                    labels=STUDENT_LABELS, rows_json=json.dumps(parsed["rows"]), filename=file.filename)
+
+    def _mapped_rows(form) -> list[dict]:
+        raw = json.loads(form.get("rows") or "[]")
+        cols = {f: str(form.get(f"col_{f}", "")) for f in roster.FIELDS}
+        return [{f: (r[int(c)] if c.isdigit() and int(c) < len(r) else "") for f, c in cols.items()}
+                for r in raw]
+
+    @app.post("/students/upload/preview", response_class=HTMLResponse)
+    async def students_preview(request: Request, user=Depends(librarian_only), conn=Depends(get_conn)):
+        form = await request.form()
+        try:
+            rows = roster.check_bulk(conn, _mapped_rows(form))
+        except (roster.RosterError, ValueError) as e:
+            return RedirectResponse(f"/students?error={quote(str(e))}#bulk", 303)
+        return page(request, "students_preview.html", user, rows=rows, labels=STUDENT_LABELS,
+                    fields=roster.FIELDS,
+                    payload=json.dumps([{f: r[f] for f in roster.FIELDS} for r in rows]),
+                    new=sum(1 for r in rows if r["status"] == "new"))
+
+    @app.post("/students/upload/save")
+    def students_save(rows: str = Form("[]"), user=Depends(librarian_only), conn=Depends(get_conn)):
+        try:
+            result = roster.save_bulk(conn, json.loads(rows), user["name"])
+        except (roster.RosterError, ValueError) as e:
+            return RedirectResponse(f"/students?error={quote(str(e))}", 303)
+        return _redirect("/students", result["message"])
+
+    @app.get("/students/{student_id}/remove", response_class=HTMLResponse)
+    def student_remove_page(request: Request, student_id: str, user=Depends(librarian_only),
+                            conn=Depends(get_conn)):
+        s = roster.get(conn, student_id)
+        if s is None:
+            raise HTTPException(404, f"No student {student_id}.")
+        return page(request, "student_remove.html", user, s=s, blocked=roster.blockers(conn, s["student_id"]),
+                    loans=register.open_loans_for_student(conn, s["student_id"]),
+                    fines=register.unpaid_fines(conn, s["student_id"]))
+
+    @app.post("/students/{student_id}/remove")
+    def student_remove(student_id: str, user=Depends(librarian_only), conn=Depends(get_conn)):
+        try:
+            roster.remove(conn, student_id, user["name"])
+        except roster.RosterError as e:
+            return RedirectResponse(f"/students?error={quote(str(e))}", 303)
+        return _redirect("/students", f"{student_id.upper()} removed. They are now inactive; "
+                                      "their history is kept and they can be restored.")
+
+    @app.post("/students/{student_id}/restore")
+    def student_restore(student_id: str, user=Depends(librarian_only), conn=Depends(get_conn)):
+        try:
+            roster.restore(conn, student_id, user["name"])
+        except roster.RosterError as e:
+            return RedirectResponse(f"/students?show=Inactive&error={quote(str(e))}", 303)
+        return _redirect("/students", f"{student_id.upper()} restored and can borrow again.")
+
+    # ------------------------------------------------------------ activity log (MINI SPEC 4)
+
+    @app.get("/activity", response_class=HTMLResponse)
+    def activity_page(request: Request, action: str = "", user=Depends(librarian_only), conn=Depends(get_conn)):
+        action = action if action in activity.ACTIONS else ""
+        return page(request, "activity.html", user, rows=activity.recent(conn, action=action),
+                    action=action, actions=activity.ACTIONS)
 
     app.state.mailer = mailer
     return app
