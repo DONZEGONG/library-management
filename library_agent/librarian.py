@@ -16,6 +16,15 @@ def _need_reason(reason: str):
         raise LibrarianError("A reason is required.")
 
 
+def _check_amount(amount: float) -> None:
+    from .config import settings
+
+    if not amount > 0:   # also catches "nan"
+        raise LibrarianError("The fine amount must be more than zero.")
+    if amount > settings.max_fine:
+        raise LibrarianError(f"A fine can't be more than ₹{settings.max_fine:,}.")
+
+
 def _latest_loan(conn, book_id):
     return conn.execute(
         "SELECT * FROM loans WHERE book_id = ? AND deleted_at IS NULL ORDER BY loan_id DESC LIMIT 1",
@@ -28,8 +37,7 @@ def set_fine(conn: sqlite3.Connection, loan_id: int, amount: float, reason: str,
     """Set a fine amount. If a pay-up message was drafted for this loan, it
     can now be sent (open decision 2)."""
     _need_reason(reason)
-    if amount <= 0:
-        raise LibrarianError("The fine amount must be more than zero.")
+    _check_amount(amount)
     loan = conn.execute("SELECT * FROM loans WHERE loan_id = ?", (loan_id,)).fetchone()
     if loan is None:
         raise LibrarianError(f"No loan #{loan_id}.")

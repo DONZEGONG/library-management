@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Edit student{% endblock %}
+{% block head %}
+<style>
+  .st-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:.6rem 1rem; }
+  .st-grid label { display:flex; flex-direction:column; font-size:.9rem; font-weight:600; gap:.2rem; }
+  .st-grid input { font-weight:400; }
+</style>
+{% endblock %}
+{% block content %}
+<h1>Edit {{ s.name }}</h1>
+{% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+<form method="post" action="/students/{{ s.student_id | urlencode }}/edit" class="card">
+  <p>Student ID: <b>{{ s.student_id }}</b> <span class="muted">(can't be changed; loans and history are linked to it)</span>
+    {% if s.status == 'Inactive' %} &middot; <b>Inactive</b>{% endif %}</p>
+  <div class="st-grid">
+    <label>Full name *<input name="name" required value="{{ form.name or '' }}" autocomplete="off"></label>
+    <label>Class/Grade<input name="grade" value="{{ form.grade or '' }}"></label>
+    <label>Section<input name="section" value="{{ form.section or '' }}"></label>
+    <label>Phone<input name="phone" type="tel" value="{{ form.phone or '' }}"></label>
+    <label>Email<input name="email" type="email" value="{{ form.email or '' }}"></label>
+    <label>Photo link (optional)<input name="photo_url" type="url" placeholder="https://" value="{{ form.photo_url or '' }}"></label>
+  </div>
+  <p class="row"><button>Save changes</button> <a href="/students">Cancel</a></p>
+</form>
+{% endblock %}

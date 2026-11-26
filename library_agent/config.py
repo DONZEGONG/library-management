@@ -42,6 +42,7 @@ class Settings:
     max_renewals: int = _int("MAX_RENEWALS", 1)
     reservation_hold_days: int = _int("RESERVATION_HOLD_DAYS", 3)
     school_escalation_days: int = _int("SCHOOL_ESCALATION_DAYS", 7)
+    max_fine: int = _int("MAX_FINE", 2000)   # rupees; the most a single fine can be
 
     # Email
     school_email: str = os.environ.get("SCHOOL_EMAIL", "office@school.example")

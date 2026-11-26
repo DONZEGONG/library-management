@@ -39,7 +39,8 @@
     <td><span class="pill {{ s.status }}">{{ s.status }}</span>{% if s.removed_at %}<br><span class="muted">since {{ s.removed_at[:10] }}</span>{% endif %}</td>
     <td>{% if s.status == 'Inactive' %}
       <form method="post" action="/students/{{ s.student_id | urlencode }}/restore"><button class="secondary">Restore</button></form>
-      {% else %}<a href="/students/{{ s.student_id | urlencode }}/remove">Remove</a>{% endif %}</td>
+      {% else %}<a href="/students/{{ s.student_id | urlencode }}/remove">Remove</a>{% endif %}
+      &middot; <a href="/students/{{ s.student_id | urlencode }}/edit">Edit</a></td>
   </tr>
   {% else %}
   <tr><td colspan="8" class="muted">No {{ '' if show == 'All' else show | lower }} students{% if q %} match &ldquo;{{ q }}&rdquo;{% endif %}.</td></tr>

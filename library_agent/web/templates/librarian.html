@@ -13,7 +13,7 @@
 <div class="card"><b>Set a fine</b> <span class="muted">(sends any drafted pay-up message)</span>
   <form method="post" action="/librarian/fine" class="row">
     <input name="loan_id" placeholder="Loan #" required size="6">
-    <input name="amount" type="number" step="0.01" min="0.01" placeholder="Amount" required>
+    <input name="amount" type="number" step="0.01" min="0.01" max="{{ max_fine }}" placeholder="Amount (up to &#8377;{{ max_fine }})" required>
     <input name="reason" placeholder="Reason" required style="flex:1">
     <button>Set fine</button>
   </form>
@@ -28,7 +28,7 @@
       <td>{% if f.status in ('unpaid', 'reduced') %}
         <form method="post" action="/librarian/fine/{{ f.fine_id }}" class="row">
           <select name="status"><option>paid</option><option>waived</option><option>reduced</option></select>
-          <input name="new_amount" type="number" step="0.01" placeholder="New amount" size="6">
+          <input name="new_amount" type="number" step="0.01" min="0.01" max="{{ max_fine }}" placeholder="New amount" size="6">
           <input name="reason" placeholder="Reason" required>
           <button class="secondary">Save</button>
         </form>{% endif %}</td></tr>

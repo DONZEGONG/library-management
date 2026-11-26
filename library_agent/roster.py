@@ -40,11 +40,11 @@ def clean(row: dict) -> dict:
     return out
 
 
-def problems(conn, row: dict) -> list[str]:
+def problems(conn, row: dict, new: bool = True) -> list[str]:
     errors = []
     if not row["student_id"]:
         errors.append("Student ID is missing.")
-    elif conn.execute("SELECT 1 FROM students WHERE student_id = ?", (row["student_id"],)).fetchone():
+    elif new and conn.execute("SELECT 1 FROM students WHERE student_id = ?", (row["student_id"],)).fetchone():
         errors.append(DUPLICATE)  # also counts removed students, so an ID is never reused
     if not row["name"]:
         errors.append("Full name is missing.")
@@ -112,6 +112,34 @@ def save_bulk(conn, rows: list[dict], user: str) -> dict:
     skipped = len(checked) - len(new)
     return {"added": len(new), "skipped": skipped,
             "message": f"{len(new)} added, {skipped} skipped."}
+
+
+EDITABLE = ("name", "grade", "section", "phone", "email", "photo_url")
+
+
+def edit_student(conn, student_id: str, data: dict, user: str) -> dict:
+    """Change a student's details. The Student ID stays the same, because
+    loans and history are linked to it."""
+    s = get(conn, student_id)
+    if s is None:
+        raise RosterError(f"No student {student_id}.")
+    row = clean({**data, "student_id": s["student_id"]})
+    errors = problems(conn, row, new=False)
+    if errors:
+        raise RosterError(" ".join(errors))
+    old = {"name": s["name"], "grade": s["grade"], "section": s["section"], "phone": s["phone"],
+           "email": s["contact_email"], "photo_url": s["photo_url"]}
+    changed = [f for f in EDITABLE if (old[f] or "") != row[f]]
+    if not changed:
+        return {"changed": []}
+    conn.execute("UPDATE students SET name = ?, grade = ?, section = ?, phone = ?, contact_email = ?,"
+                 " photo_url = ? WHERE student_id = ?",
+                 (row["name"], row["grade"], row["section"], row["phone"], row["email"], row["photo_url"],
+                  s["student_id"]))
+    details = "; ".join(f"{f}: '{old[f] or ''}' -> '{row[f]}'" for f in changed)
+    activity.log(conn, user, "EDIT_STUDENT", f"{s['student_id']} {details}"[:4000], "manual")
+    conn.commit()
+    return {"changed": changed}
 
 
 def get(conn, student_id: str):
